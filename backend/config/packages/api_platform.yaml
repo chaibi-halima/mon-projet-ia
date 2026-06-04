@@ -1,0 +1,12 @@
+# backend/config/packages/api_platform.yaml
+api_platform:
+    title: 'Mon API avec IA'
+    version: '1.0.0'
+    mapping:
+        paths:
+            - '%kernel.project_dir%/src/Entity'
+            
+    # 💡 AJOUTE CETTE SECTION :
+    formats:
+        jsonld: ['application/ld+json']
+        json: ['application/json'] # 👈 Permet d'accepter le JSON standard !

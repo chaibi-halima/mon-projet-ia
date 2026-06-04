@@ -1,0 +1,16 @@
+framework:
+    messenger:
+        transports:
+            async: 'doctrine://default' # Le transport utilise la BDD
+
+        routing:
+            # 💡 On dit à Symfony : "Tous les GenerateArticleMessage vont dans l'async"
+            App\Message\GenerateArticleMessage: async
+
+# when@test:
+#    framework:
+#        messenger:
+#            transports:
+#                # replace with your transport name here (e.g., my_transport: 'in-memory://')
+#                # For more Messenger testing tools, see https://github.com/zenstruck/messenger-test
+#                async: 'in-memory://'
