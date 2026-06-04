@@ -1,68 +1,90 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { Card, Form, Input, Button, Typography, message } from 'antd';
+import { EditOutlined, SendOutlined } from '@ant-design/icons';
 
-export default function ManualForm() {
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+const { Title, Paragraph } = Typography;
+
+function ManualForm() {
   const [loading, setLoading] = useState(false);
+  const [messageApi, contextHolder] = message.useMessage();
   const navigate = useNavigate();
+  const [form] = Form.useForm();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const onFinish = async (values) => {
     setLoading(true);
+    messageApi.loading({ content: 'Publication en cours...', key: 'publish' });
 
     try {
-      const response = await fetch('https://localhost/api/articles', { // 💡 URL classique
+      const response = await fetch('https://localhost/api/articles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/ld+json' },
-        body: JSON.stringify({ title, content })
+        body: JSON.stringify({ title: values.title, content: values.content })
       });
 
-      if (!response.ok) {
-        throw new Error('Erreur lors de la sauvegarde');
+      if (response.ok) {
+        messageApi.success({ content: 'Article publié avec succès !', key: 'publish', duration: 2 });
+        setTimeout(() => navigate('/'), 1000); // Redirection après 1s
+      } else {
+        messageApi.error({ content: 'Échec de la publication.', key: 'publish', duration: 3 });
       }
-
-      // Redirection vers la page d'accueil après succès
-      navigate('/');
-    } catch (err) {
-      alert(err.message);
+    } catch (error) {
+      messageApi.error({ content: 'Erreur réseau.', key: 'publish', duration: 3 });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
-      <Link to="/">⬅️ Retour à l'accueil (Mode IA)</Link>
+    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+      {contextHolder}
       
-      <h2>Créer un Article Manuellement</h2>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Titre :</label>
-          <input 
-            type="text" 
-            value={title} 
-            onChange={(e) => setTitle(e.target.value)} 
-            required 
-            style={{ width: '100%', padding: '8px' }}
-          />
-        </div>
-        
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Contenu :</label>
-          <textarea 
-            rows="6" 
-            value={content} 
-            onChange={(e) => setContent(e.target.value)} 
-            required 
-            style={{ width: '100%', padding: '8px' }}
-          />
+      <Card variant="outlined" style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <EditOutlined style={{ fontSize: '40px', color: '#1677ff', marginBottom: '16px' }} />
+          <Title level={2} style={{ margin: 0 }}>Rédaction Manuelle</Title>
+          <Paragraph type="secondary" style={{ fontSize: '16px', mt: 2 }}>
+            Prenez la plume et ajoutez directement votre contenu à la base de données.
+          </Paragraph>
         </div>
 
-        <button type="submit" disabled={loading} style={{ padding: '10px', cursor: 'pointer' }}>
-          {loading ? 'Sauvegarde...' : 'Publier sans IA'}
-        </button>
-      </form>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={onFinish}
+          size="large"
+        >
+          <Form.Item
+            name="title"
+            label={<span style={{ fontWeight: 600 }}>Titre de l'article</span>}
+            rules={[{ required: true, message: 'Veuillez saisir un titre.' }]}
+          >
+            <Input placeholder="Un titre accrocheur..." />
+          </Form.Item>
+
+          <Form.Item
+            name="content"
+            label={<span style={{ fontWeight: 600 }}>Contenu de l'article</span>}
+            rules={[{ required: true, message: 'Veuillez saisir le contenu.' }]}
+          >
+            <Input.TextArea rows={8} placeholder="Écrivez votre chef-d'œuvre ici..." />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Button 
+              type="primary" 
+              htmlType="submit" 
+              loading={loading}
+              icon={<SendOutlined />}
+              style={{ width: '100%', height: '50px', fontSize: '16px', fontWeight: 'bold' }}
+            >
+              Publier l'article
+            </Button>
+          </Form.Item>
+        </Form>
+      </Card>
     </div>
   );
 }
+
+export default ManualForm;
