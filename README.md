@@ -1,30 +1,33 @@
 # 🚀 AI Content Generator : Architecture Asynchrone Full-Stack
 
-> **Un projet de niveau professionnel démontrant l'intégration d'une intelligence artificielle locale au sein d'une architecture moderne, asynchrone et découplée.**
+> **Un projet de niveau professionnel démontrant l'intégration d'une intelligence artificielle locale au sein d'une architecture moderne, découplée et dotée d'une interface utilisateur d'entreprise (Enterprise UI).**
 
-Ce projet est une application web complète permettant de générer des articles de blog ou du contenu SEO de manière automatisée grâce à une intelligence artificielle (LLM) hébergée localement. Il met en lumière une architecture robuste capable de gérer des tâches lourdes en arrière-plan sans bloquer l'expérience utilisateur.
+Ce projet est une application web complète permettant de générer des articles de blog ou du contenu SEO de manière automatisée grâce à une intelligence artificielle (LLM) hébergée localement. Il met en lumière une architecture robuste capable de gérer des tâches lourdes en arrière-plan sans bloquer l'expérience utilisateur, le tout piloté par une interface moderne et soignée.
 
 ---
 
 ## 🛠️ Stack Technique & Architecture
 
-L'application repose sur une architecture moderne séparant clairement le client, le serveur et les travailleurs (workers).
+L'application repose sur une architecture découplée séparant clairement le client, le serveur et les travailleurs (workers).
 
-* **Frontend :** React (via Vite) configuré en PWA (Progressive Web App) pour une expérience fluide et rapide.
+* **Frontend :** React (Vite) couplé à **Ant Design (Antd)** pour des composants UI haut de gamme et **React Router DOM** pour la navigation multi-page (SPA). Configuré en PWA (Progressive Web App).
 * **Backend :** API RESTful construite avec Symfony 8 et propulsée par FrankenPHP pour des performances optimales.
 * **Base de données :** MySQL (Conteneurisée et gérable directement via VS Code / SQLTools).
 * **Intelligence Artificielle :** Ollama (LLM Llama 3.2) fonctionnant en local, configuré pour renvoyer des données structurées (JSON).
-* **Système asynchrone :** Symfony Messenger. Les requêtes générées par les utilisateurs ou le terminal sont placées dans une file d'attente et traitées par des *Workers* en tâche de fond.
+* **Système asynchrone :** Symfony Messenger. Les requêtes générées sont placées dans une file d'attente et traitées par des *Workers* en tâche de fond.
 
 ---
 
-## ✨ Fonctionnalités Principales
+## ✨ Fonctionnalités & Expérience Utilisateur (UI/UX)
 
-* **Génération d'articles par IA :** Requêtes adressées à un modèle LLM local pour créer des titres SEO, du contenu et des mots-clés de manière autonome.
-* **Traitement Asynchrone (CQRS) :** L'interface utilisateur n'est jamais bloquée. L'API délègue la génération à un *Message Bus*.
-* **Double Interface de Commande :** * **Mode Web :** Déclenchement de la génération via l'interface React.
-  * **Mode CLI :** Commandes console Symfony personnalisées (`app:mass-generate`) pour générer des dizaines d'articles en masse directement depuis le terminal.
-* **Typage Strict (DTO) :** L'IA est contrainte de répondre dans un format JSON strict, mappé automatiquement sur des objets PHP (DTO) via le composant Serializer.
+L'application a été entièrement conçue pour offrir un confort d'utilisation optimal :
+
+* **Navigation Multi-page Fluide :** Un menu global persistant permet de naviguer instantanément entre la Bibliothèque, le module de Rédaction Manuelle, et le laboratoire de Génération IA.
+* **Affichage en Grille Responsive (2 colonnes) :** Les articles sont présentés sous forme de cartes élégantes alignées parfaitement deux par deux sur ordinateur et tablette, et s'adaptent automatiquement sur mobile.
+* **Composants intelligents :**
+  * **Gestion de l'espace :** Un système dynamique de troncature du texte avec boutons interactifs *"Voir plus ↓ / Voir moins ↑"* intégrés de manière isolée sur chaque carte.
+  * **Info-bulles (Tooltips) :** Survoler un titre d'article trop long affiche instantanément son contenu intégral dans une bulle contextuelle fluide.
+  * **Notifications natives :** Remplacement des alertes systèmes par le composant global `message` d'Ant Design pour des retours d'état animés et non intrusifs.
 
 ---
 
@@ -42,7 +45,7 @@ Pour faire tourner ce projet sur votre machine, vous aurez besoin de :
 
 **1. Cloner le dépôt**
 ```bash
-git clone https://github.com/chaibi-halima/mon-projet-ia.git
+git clone [https://github.com/chaibi-halima/mon-projet-ia.git](https://github.com/chaibi-halima/mon-projet-ia.git)
 cd mon-projet-ia
 ```
 
@@ -57,7 +60,8 @@ Ouvrez un nouveau terminal et lancez le consommateur de messages :
 docker compose exec webgateway php bin/console messenger:consume async -vv
 ```
 
-**4. Lancer le Frontend (React)**
+**4. Lancer le Frontend (React + Ant Design)**
+Ouvrez un autre terminal dans le dossier frontend :
 ```bash
 cd frontend
 npm install
@@ -77,14 +81,13 @@ Pour générer 5 articles sur un sujet spécifique via le terminal :
 docker compose exec webgateway php bin/console app:mass-generate "L'exploration spatiale" 5
 ```
 
-Les tickets seront envoyés dans la file d'attente et le Worker (s'il est lancé) commencera immédiatement la rédaction de manière invisible.
-
 ---
 
 ## 🧠 Apprentissages & Défis Techniques
 
-Ce projet a été l'occasion d'implémenter et de résoudre des problématiques d'architecture avancées :
+Ce projet a permis de résoudre des problématiques d'architecture et d'intégration avancées :
 
-* **Orchestration Docker :** Faire communiquer un front Vite, une API FrankenPHP, une base MySQL et un moteur IA externe dans un réseau sécurisé.
-* **Fiabilisation de l'IA :** Forcer un LLM à produire du JSON valide et utiliser des DTO assouplis (`string|array`) pour prévenir les crashs liés aux hallucinations du modèle.
-* **Gestion des CORS et du Cache :** Résolution des blocages de sécurité navigateurs (Preflight OPTIONS) et maîtrise du Service Worker de la PWA.
+* **Migration vers un Design System :** Transition d'un framework utilitaire (Tailwind) vers une bibliothèque de composants d'entreprise (Ant Design), améliorant la maintenabilité et la vitesse de développement.
+* **Optimisation des performances d'affichage (CLS) :** Résolution des sauts de mise en page (*Cumulative Layout Shift*) lors du chargement instantané de la PWA grâce au blocage strict des dimensions du conteneur de navigation (`flexShrink`, `whiteSpace`).
+* **Modularité React :** Isolation de la logique d'affichage des articles dans un sous-composant autonome (`ArticleCard`) pour garantir la gestion indépendante des états locaux (boutons *Voir plus*).
+* **Fiabilisation des flux de données :** Implémentation de structures de sécurité (*garde-fous*) multi-formats dans l'analyse des réponses d'API (adaptation dynamique aux clés `member`, `hydra:member` et tableaux bruts).
