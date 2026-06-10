@@ -1,113 +1,196 @@
-import { useEffect, useState } from 'react';
-import { Card, Typography, Spin, Row, Col, Tooltip } from 'antd';
-import { SyncOutlined, FileTextOutlined } from '@ant-design/icons';
+import { useState, useEffect } from 'react';
+import { Card, Row, Col, Input, Select, Space, Spin, Empty, Tag, Typography } from 'antd';
+import { CalendarOutlined, SearchOutlined, SortAscendingOutlined, TagsOutlined } from '@ant-design/icons';
 
-const { Title, Text } = Typography;
+const { Title, Paragraph } = Typography;
 
-// --------------------------------------------------------
-// 💡 NOUVEAU COMPOSANT : Gère une seule carte d'article
-// --------------------------------------------------------
-function ArticleCard({ article }) {
-  // État local pour savoir si l'article est déplié ou non
-  const [expanded, setExpanded] = useState(false);
-  
-  const MAX_LENGTH = 200; // Nombre de caractères avant de couper
-  const isLongText = article.content && article.content.length > MAX_LENGTH;
-  
-  // Le texte affiché dépend de l'état "expanded"
-  const displayContent = expanded || !isLongText 
-    ? article.content 
-    : `${article.content.substring(0, MAX_LENGTH)}...`;
-
-  return (
-    <Card 
-      // 💡 1. Tooltip sur le titre : affiche le titre complet au survol (en bleu)
-      title={
-        <Tooltip title={article.title} placement="topLeft" color="#1677ff">
-          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {article.title}
-          </div>
-        </Tooltip>
-      } 
-      hoverable
-      extra={<Text type="secondary">ID: {article.id}</Text>}
-      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
-      styles={{ body: { flexGrow: 1, display: 'flex', flexDirection: 'column' } }}
-    >
-      {article.content && article.content.includes('⏳') ? (
-        <div style={{ textAlign: 'center', padding: '20px 0', margin: 'auto' }}>
-          <Spin indicator={<SyncOutlined spin style={{ fontSize: 24, color: '#faad14' }} />} />
-          <div style={{ marginTop: '12px', color: '#d48806', fontWeight: 'bold' }}>L'IA rédige...</div>
-        </div>
-      ) : (
-        <>
-          <div style={{ whiteSpace: 'pre-wrap', color: 'rgba(0, 0, 0, 0.88)', flexGrow: 1 }}>
-            {displayContent}
-          </div>
-          
-          {/* 💡 2. Bouton Voir plus / Voir moins */}
-          {isLongText && (
-            <div style={{ marginTop: '16px', textAlign: 'right' }}>
-              <a 
-                onClick={() => setExpanded(!expanded)} 
-                style={{ fontWeight: 600, color: '#1677ff', background: '#e6f4ff', padding: '4px 12px', borderRadius: '12px' }}
-              >
-                {expanded ? 'Voir moins ↑' : 'Voir plus ↓'}
-              </a>
-            </div>
-          )}
-        </>
-      )}
-    </Card>
-  );
-}
-
-// --------------------------------------------------------
-// COMPOSANT PRINCIPAL : La page d'accueil
-// --------------------------------------------------------
 function App() {
   const [articles, setArticles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  // 💡 États pour la recherche et les filtres
+  const [searchText, setSearchText] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [sortBy, setSortBy] = useState('newest'); // 'newest' ou 'oldest'
 
-  const loadArticles = () => {
-    fetch('https://localhost/api/articles')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.member) setArticles(data.member);
-        else if (data && data['hydra:member']) setArticles(data['hydra:member']);
-        else if (Array.isArray(data)) setArticles(data);
-        else setArticles([]);
-      })
-      .catch(() => setArticles([]));
-  };
-
+  // Récupération des articles depuis l'API Symfony
   useEffect(() => {
-    loadArticles();
-    const interval = setInterval(loadArticles, 5000);
-    return () => clearInterval(interval);
+    fetch('https://localhost/api/articles')
+      .then((res) => res.json())
+      .then((data) => {
+        // 💡 Validation stricte du format des données
+        if (data && Array.isArray(data.member)) {
+          // C'est le format standard propre à API Platform
+          setArticles(data.member);
+        } else if (Array.isArray(data)) {
+          // C'veut dire que l'API a renvoyé un tableau brut []
+          setArticles(data);
+        } else {
+          // C'est un objet (probablement une erreur 401, 500 ou autre)
+          console.error("Format de données invalide reçu de l'API :", data);
+          setArticles([]); // On force un tableau vide pour éviter le crash
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Erreur réseau lors de la récup des articles:", err);
+        setArticles([]);
+        setLoading(false);
+      });
   }, []);
 
+  // --------------------------------------------------------
+  // 🧠 LOGIQUE DE FILTRAGE ET DE TRI (Exécutée à chaque rendu)
+  // --------------------------------------------------------
+  const filteredAndSortedArticles = articles
+    // 1. Filtre par texte (recherche dans le titre OU le contenu)
+    .filter((article) => {
+      const matchesSearch = 
+        article.title?.toLowerCase().includes(searchText.toLowerCase()) ||
+        article.content?.toLowerCase().includes(searchText.toLowerCase());
+      
+      // 2. Filtre par catégorie (si ton entité possède un champ category ou tags)
+      const matchesCategory = 
+        selectedCategory === 'all' || 
+        article.category?.name?.toLowerCase() === selectedCategory.toLowerCase();
+
+      return matchesSearch && matchesCategory;
+    })
+    // 3. Tri par date
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.date || 0);
+      const dateB = new Date(b.createdAt || b.date || 0);
+      
+      return sortBy === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+
+  // Extraction dynamique des catégories existantes pour remplir le menu déroulant
+  const categories = ['all', ...new Set(articles.map(a => a?.category?.name).filter(Boolean))];
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '100px 0' }}>
+        <Spin size="large" description="Chargement de la bibliothèque..." />
+      </div>
+    );
+  }
+
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '32px', gap: '12px' }}>
-        <FileTextOutlined style={{ fontSize: '28px', color: '#1677ff' }} />
-        <Title level={2} style={{ margin: 0 }}>Bibliothèque d'articles</Title>
+    <div>
+      <div style={{ marginBottom: '40px', textAlign: 'center' }}>
+        <Title level={2}>📚 Bibliothèque d'Articles</Title>
+        <Paragraph type="secondary">Explorez, recherchez et triez vos contenus générés par IA ou rédigés à la main.</Paragraph>
       </div>
 
-      <Row gutter={[24, 24]} align="stretch">
-        {articles.length === 0 ? (
-          <Col span={24} style={{ textAlign: 'center', padding: '60px 0', color: '#888', background: '#fff', borderRadius: '8px' }}>
-            Aucun article pour le moment. Utilisez le menu pour en créer un !
+      {/* 🛠️ BARRE DE RECHERCHE ET DE FILTRES */}
+      <Card style={{ marginBottom: '30px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+        <Row gutter={[16, 16]} align="middle" justify="space-between">
+          
+          {/* Recherche textuelle */}
+          <Col xs={24} md={10}>
+            <Input
+              placeholder="Rechercher un article par titre ou contenu..."
+              prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              allowClear
+              size="large"
+            />
           </Col>
-        ) : (
-          articles.map(article => (
-            <Col xs={24} sm={24} md={12} lg={12} xl={12} xxl={12} key={article.id}>
-              {/* 💡 On appelle notre nouveau sous-composant ici */}
-              <ArticleCard article={article} />
+
+          {/* Filtres de Tri et Catégories */}
+          <Col xs={24} md={12} style={{ textAlign: 'right' }}>
+            <Space wrap size="middle">
+              
+              {/* Menu déroulant des catégories */}
+              <Space>
+                <TagsOutlined style={{ color: '#8c8c8c' }} />
+                <Select
+                  value={selectedCategory}
+                  onChange={(value) => setSelectedCategory(value)}
+                  style={{ width: 160 }}
+                  size="large"
+                  options={categories.map(cat => ({
+                    value: cat,
+                    label: cat === 'all' ? 'Toutes les catégories' : cat
+                  }))}
+                />
+              </Space>
+
+              {/* Menu déroulant de tri par date */}
+              <Space>
+                <SortAscendingOutlined style={{ color: '#8c8c8c' }} />
+                <Select
+                  value={sortBy}
+                  onChange={(value) => setSortBy(value)}
+                  style={{ width: 180 }}
+                  size="large"
+                  options={[
+                    { value: 'newest', label: 'Plus récents d\'abord' },
+                    { value: 'oldest', label: 'Plus anciens d\'abord' },
+                  ]}
+                />
+              </Space>
+
+            </Space>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* 📦 AFFICHAGE DE LA GRILLE D'ARTICLES */}
+      {filteredAndSortedArticles.length === 0 ? (
+        <Empty 
+          description="Aucun article ne correspond à vos critères de recherche." 
+          style={{ marginTop: '60px' }}
+        />
+      ) : (
+        <Row gutter={[24, 24]}>
+          {filteredAndSortedArticles.map((article) => (
+            <Col xs={24} sm={12} lg={8} key={article.id}>
+              <Card
+                hoverable
+                style={{ 
+                  height: '100%', 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  justifyContent: 'space-between',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                  borderRadius: '12px',
+                  flex: 1,
+                }}
+              >
+                <div>
+                  <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    {/* Badge de catégorie optionnel */}
+                    <Tag color={article.category?.name ? 'blue' : 'default'}>
+                      {article.category?.name || 'Général'}
+                    </Tag>
+                    
+                    {/* Date formatée au propre */}
+                    <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                      <CalendarOutlined style={{ marginRight: '4px' }} />
+                      {article.createdAt ? new Date(article.createdAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
+                    </span>
+                  </div>
+
+                  <Title level={4} style={{ marginTop: 0, marginBottom: '10px' }}>
+                    {article.title}
+                  </Title>
+                  
+                  <Paragraph 
+                    ellipsis={{ rows: 3 }} 
+                    type="secondary" 
+                    style={{ marginBottom: '20px' }}
+                  >
+                    {article.content}
+                  </Paragraph>
+                </div>
+              </Card>
             </Col>
-          ))
-        )}
-      </Row>
-    </>
+          ))}
+        </Row>
+      )}
+    </div>
   );
 }
 

@@ -10,3 +10,21 @@ api_platform:
     formats:
         jsonld: ['application/ld+json']
         json: ['application/json'] # 👈 Permet d'accepter le JSON standard !
+
+    swagger:
+        api_keys:
+            JWT:
+                name: Authorization
+                type: header
+
+    defaults:
+        openapi_context:
+            components:
+                securitySchemes:
+                    bearerAuth:
+                        type: http
+                        scheme: bearer
+                        bearerFormat: JWT
+                        description: "Collez uniquement votre jeton JWT brut (le mot 'Bearer' sera ajouté automatiquement)."
+            security:
+                - bearerAuth: []

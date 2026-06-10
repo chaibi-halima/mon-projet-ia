@@ -11,8 +11,10 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Put;
+use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ORM\Entity(repositoryClass: ArticleRepository::class)]
+#[ORM\HasLifecycleCallbacks]
 #[ApiResource(
     operations: [
         new GetCollection(),
@@ -21,27 +23,39 @@ use ApiPlatform\Metadata\Put;
         new Put(),
         // 1️⃣ ROUTE MANUELLE : /api/articles
         new Post(name: 'post_manual'), 
-
         // 2️⃣ ROUTE IA : /api/articles/generate
         new Post(
             name: 'post_ai',
             uriTemplate: '/articles/generate', // 💡 C'est "uriTemplate" qu'il faut écrire ici !
             processor: ArticleAiProcessor::class
         )
-    ]
+    ],
+    normalizationContext: ['groups' => ['article:read']],
+    denormalizationContext: ['groups' => ['article:write']]
 )]
 class Article
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['article:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['article:read', 'article:write'])]
     private ?string $title = null;
 
     #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['article:read', 'article:write'])]
     private ?string $content = null;
+
+    #[ORM\ManyToOne(inversedBy: 'articles')]
+    #[Groups(['article:read', 'article:write'])]
+    private ?Category $category = null;
+
+    #[ORM\Column]
+    #[Groups(['article:read'])]
+    private ?\DateTimeImmutable $createdAt = null;
 
     public function getId(): ?int
     {
@@ -70,5 +84,36 @@ class Article
         $this->content = $content;
 
         return $this;
+    }
+
+    public function getCategory(): ?Category
+    {
+        return $this->category;
+    }
+
+    public function setCategory(?Category $category): static
+    {
+        $this->category = $category;
+
+        return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
+    public function setCreatedAt(\DateTimeImmutable $createdAt): static
+    {
+        $this->createdAt = $createdAt;
+        return $this;
+    }
+
+    #[ORM\PrePersist]
+    public function onPrePersist(): void
+    {
+        if ($this->createdAt === null) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
     }
 }
