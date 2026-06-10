@@ -12,6 +12,9 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Put;
 use Symfony\Component\Serializer\Attribute\Groups;
+use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 
 #[ORM\Entity(repositoryClass: ArticleRepository::class)]
 #[ORM\HasLifecycleCallbacks]
@@ -31,7 +34,8 @@ use Symfony\Component\Serializer\Attribute\Groups;
         )
     ],
     normalizationContext: ['groups' => ['article:read']],
-    denormalizationContext: ['groups' => ['article:write']]
+    denormalizationContext: ['groups' => ['article:write']],
+    paginationItemsPerPage: 6
 )]
 class Article
 {
@@ -111,6 +115,14 @@ class Article
 
     #[ORM\PrePersist]
     public function onPrePersist(): void
+    {
+        if ($this->createdAt === null) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
+    }
+
+    #[ORM\PreUpdate]
+    public function onPreUpdate(): void
     {
         if ($this->createdAt === null) {
             $this->createdAt = new \DateTimeImmutable();
