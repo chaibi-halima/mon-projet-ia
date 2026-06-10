@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 
+const DEFAULT_IMAGE = 'https://placehold.co/800x400/f0f2f5/8c8c8c?text=Image+non+fournie';
 const { Title, Paragraph } = Typography;
 
 function App() {
@@ -52,33 +53,36 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // 💡 Construction de l'URL avec les paramètres attendus par API Platform
+    const token = localStorage.getItem('jwt_token');
     let url = `https://localhost/api/articles?page=${currentPage}`;
     
-    if (searchText) {
-      url += `&title=${encodeURIComponent(searchText)}`;
-    }
-    if (selectedCategory && selectedCategory !== 'all') {
-      url += `&category.name=${encodeURIComponent(selectedCategory)}`;
-    }
+    if (searchText) url += `&title=${encodeURIComponent(searchText)}`;
+    if (selectedCategory && selectedCategory !== 'all') url += `&category.name=${encodeURIComponent(selectedCategory)}`;
     
-    // Paramètre de tri API Platform : order[createdAt]=desc
     const order = sortBy === 'newest' ? 'desc' : 'asc';
     url += `&order[createdAt]=${order}`;
 
-    fetch(url)
+    // 💡 AJOUT DU HEADER AVEC LE TOKEN ICI
+    fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/ld+json'
+      }
+    })
       .then(res => res.json())
       .then(data => {
-        setArticles(data.member || []);
-        // 💡 API Platform nous donne le nombre total d'articles correspondant à la recherche en BDD
-        setTotalItems(data.totalItems || 0); 
-        setLoading(false);
+        // On met à jour l'état uniquement si on a reçu des membres
+        if (data.member) {
+          setArticles(data.member);
+          setTotalItems(data.totalItems || 0); 
+        }
+        setLoading(false); 
       })
       .catch(err => {
         console.error("Erreur articles:", err);
         setLoading(false);
       });
-  }, [currentPage, searchText, selectedCategory, sortBy, tick]); // 🔥 Relance le fetch si un de ces états change
+  }, [currentPage, searchText, selectedCategory, sortBy, tick]);
 
   // Suppression
   const handleDelete = (id) => {
@@ -107,7 +111,8 @@ function App() {
     editForm.setFieldsValue({
       title: article.title,
       content: article.content,
-      category: article.category ? article.category['@id'] : undefined
+      category: article.category ? article.category['@id'] : undefined,
+      imageUrl: article.imageUrl
     });
     setIsEditModalVisible(true);
   };
@@ -207,7 +212,15 @@ function App() {
                 <Col xs={24} sm={12} lg={8} key={article.id}>
                   <Card
                     hoverable
-                    style={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: '12px' }}
+                    // 💡 NOUVEAU : Affiche l'image en haut de la carte
+                    cover={
+                      <img 
+                        alt={article.title} 
+                        src={article.imageUrl || DEFAULT_IMAGE} 
+                        style={{ height: '200px', objectFit: 'cover' }} 
+                      />
+                    }
+                    style={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: '12px', overflow: 'hidden' }}
                     bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column' }}
                   >
                     <div>
@@ -260,6 +273,17 @@ function App() {
       <Modal open={isModalVisible} onCancel={() => setIsModalVisible(false)} footer={null} width={800}>
         {selectedArticle && (
           <>
+            {/* 💡 NOUVEAU : L'image en grand dans la modale */}
+            {selectedArticle && (
+              <div style={{ margin: '-24px -24px 20px -24px' }}>
+                <img 
+                  src={selectedArticle.imageUrl || DEFAULT_IMAGE} 
+                  alt="Couverture" 
+                  style={{ width: '100%', maxHeight: '300px', objectFit: 'cover' }} 
+                />
+              </div>
+            )}
+            
             <div style={{ marginBottom: '20px', borderBottom: '1px solid #f0f0f0', paddingBottom: '20px' }}>
               <Tag color={selectedArticle.category ? 'blue' : 'default'} style={{ marginBottom: '10px' }}>{selectedArticle.category?.name || 'Général'}</Tag>
               <Title level={2} style={{ marginTop: 0 }}>{selectedArticle.title}</Title>
@@ -279,6 +303,9 @@ function App() {
             </Select>
           </Form.Item>
           <Form.Item name="content" label="Contenu" rules={[{ required: true }]}><Input.TextArea rows={8} /></Form.Item>
+          <Form.Item name="imageUrl" label="URL de l'image de couverture">
+            <Input placeholder="https://..." />
+          </Form.Item>
         </Form>
       </Modal>
     </div>

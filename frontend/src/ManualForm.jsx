@@ -34,7 +34,8 @@ function ManualForm() {
       title: values.title,
       content: values.content,
       // value.category contient déjà la chaîne "/api/categories/X" grâce au composant Select
-      category: values.category 
+      category: values.category ,
+      imageUrl: values.imageUrl || null // On peut aussi envoyer null si pas d'image
     };
 
     fetch('https://localhost/api/articles', {
@@ -78,6 +79,10 @@ function ManualForm() {
 
       <Form.Item name="content" label="Contenu" rules={[{ required: true }]}>
         <Input.TextArea rows={4} />
+      </Form.Item>
+
+      <Form.Item name="imageUrl" label="URL de l'image de couverture (Optionnel)">
+        <Input placeholder="https://..." />
       </Form.Item>
 
       <Button type="primary" htmlType="submit" loading={loading}>

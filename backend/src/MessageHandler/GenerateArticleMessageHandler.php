@@ -72,6 +72,9 @@ class GenerateArticleMessageHandler
             
             $article->setContent($formattedContent);
 
+            if (!$article->getImageUrl()) {
+                $article->setImageUrl('https://picsum.photos/seed/' . $article->getId() . '/800/400');
+            }
         } catch (\Exception $e) {
             $article->setContent('Erreur de génération : ' . $e->getMessage());
         }

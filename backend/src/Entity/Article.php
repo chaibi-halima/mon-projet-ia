@@ -37,6 +37,8 @@ use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
     denormalizationContext: ['groups' => ['article:write']],
     paginationItemsPerPage: 6
 )]
+#[ApiFilter(SearchFilter::class, properties: ['title' => 'partial', 'category.name' => 'exact'])]
+#[ApiFilter(OrderFilter::class, properties: ['createdAt'])]
 class Article
 {
     #[ORM\Id]
@@ -66,6 +68,10 @@ class Article
 
     #[Groups(['article:write'])]
     private ?string $length = null;
+
+    #[ORM\Column(length: 1024, nullable: true)]
+    #[Groups(['article:read', 'article:write'])]
+    private ?string $imageUrl = null;
 
     public function getId(): ?int
     {
@@ -138,6 +144,18 @@ class Article
     public function setLength(?string $length): static
     {
         $this->length = $length;
+        return $this;
+    }
+
+    public function getImageUrl(): ?string
+    {
+        return $this->imageUrl;
+    }
+
+    public function setImageUrl(?string $imageUrl): static
+    {
+        $this->imageUrl = $imageUrl;
+
         return $this;
     }
 
