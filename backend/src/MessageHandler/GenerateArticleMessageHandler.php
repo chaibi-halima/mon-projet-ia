@@ -13,7 +13,6 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 #[AsMessageHandler]
 class GenerateArticleMessageHandler
 {
-    // 💡 1. On injecte le Serializer dans le constructeur
     public function __construct(
         private EntityManagerInterface $entityManager,
         private HttpClientInterface $httpClient,
@@ -26,48 +25,55 @@ class GenerateArticleMessageHandler
         if (!$article) return;
 
         try {
-            // 💡 2. Le prompt très précis
+            // 💡 1. LE PROMPT QUI EXIGE DU JSON AVEC TON ET LONGUEUR
             $prompt = sprintf(
-                "Rédige un article sur : '%s'. 
-                Tu dois répondre UNIQUEMENT avec un objet JSON valide contenant ces 3 clés :
-                - 'seo_title' : un titre accrocheur.
-                - 'content' : le texte de l'article (3 phrases max).
-                - 'tags' : un tableau de 3 mots-clés.", 
-                $message->getTitle()
+                "Tu es un rédacteur web expert. Rédige un article sur le sujet suivant : '%s'. 
+                Directives strictes :
+                1. Le ton de l'article doit être : %s.
+                2. La longueur de l'article doit être : %s.
+                
+                Tu DOIS IMPÉRATIVEMENT répondre au format JSON strict avec EXACTEMENT les clés suivantes :
+                {
+                    \"seo_title\": \"Le titre accrocheur de l'article\",
+                    \"content\": \"Le contenu complet formaté en Markdown avec des titres (##), gras et listes\",
+                    \"tags\": [\"tag1\", \"tag2\", \"tag3\"]
+                }",
+                $message->getTopic(), // 👈 Utilisation des getters !
+                $message->getTone() ?? 'professionnel',
+                $message->getLength() ?? 'moyen'
             );
 
-            // 💡 3. L'appel HTTP avec le "format: json"
+            // 💡 2. Appel à Ollama (Format JSON forcé)
             $response = $this->httpClient->request('POST', 'http://ollama:11434/api/generate', [
                 'json' => [
                     'model' => 'llama3.2',
                     'prompt' => $prompt,
                     'stream' => false,
-                    'format' => 'json' // Ollama bloque tout texte qui n'est pas du JSON
+                    'format' => 'json'
                 ],
                 'timeout' => 300 
             ]);
 
-            // Récupération de la chaîne JSON renvoyée par l'IA
             $jsonString = $response->toArray()['response'] ?? '{}';
 
-            // 💡 4. LA MAGIE DE L'OBJECT MAPPER :
-            // Symfony lit le JSON, crée l'objet DTO, et remplit les propriétés automatiquement !
+            // 💡 3. Désérialisation dans le DTO
             /** @var OllamaArticleDto $dto */
             $dto = $this->serializer->deserialize($jsonString, OllamaArticleDto::class, 'json');
 
-            // 💡 AJOUT ICI : Si l'IA a envoyé un tableau de phrases, on les fusionne en un seul texte
             $realContent = is_array($dto->content) 
-                ? implode(' ', $dto->content) 
+                ? implode("\n\n", $dto->content) 
                 : $dto->content;
 
-            // On met à jour l'entité avec le titre et le contenu nettoyé
-            $article->setTitle($dto->seo_title);
+            // 💡 4. Mise à jour de l'article
+            $article->setTitle($dto->seo_title ?? 'Titre généré');
             
-            $formattedContent = $realContent . "\n\n🏷️ Tags : " . implode(', ', $dto->tags);
+            $tagsArray = is_array($dto->tags) ? $dto->tags : [];
+            $formattedContent = $realContent . "\n\n🏷️ Tags : " . implode(', ', $tagsArray);
+            
             $article->setContent($formattedContent);
 
         } catch (\Exception $e) {
-            $article->setContent('Erreur de génération ou JSON invalide : ' . $e->getMessage());
+            $article->setContent('Erreur de génération : ' . $e->getMessage());
         }
 
         $this->entityManager->flush();

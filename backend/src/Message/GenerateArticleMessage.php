@@ -6,7 +6,9 @@ class GenerateArticleMessage
 {
     public function __construct(
         private int $articleId,
-        private string $title
+        private string $topic,
+        public ?string $tone = 'professionnel',
+        public ?string $length = 'moyen'
     ) {}
 
     public function getArticleId(): int
@@ -14,8 +16,18 @@ class GenerateArticleMessage
         return $this->articleId;
     }
 
-    public function getTitle(): string
+    public function getTopic(): string
     {
-        return $this->title;
+        return $this->topic;
+    }
+
+    public function getTone(): ?string
+    {
+        return $this->tone;
+    }
+
+    public function getLength(): ?string
+    {
+        return $this->length;
     }
 }

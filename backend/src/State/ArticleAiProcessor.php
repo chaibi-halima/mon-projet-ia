@@ -22,8 +22,6 @@ class ArticleAiProcessor implements ProcessorInterface
             return $this->persistProcessor->process($data, $operation, $uriVariables, $context);
         }
 
-        $title = $data->getTitle();
-
         // 1. On met un texte d'attente pour que l'utilisateur sache que l'IA travaille
         $data->setContent('⏳ En cours de rédaction par l\'IA...');
 
@@ -31,7 +29,7 @@ class ArticleAiProcessor implements ProcessorInterface
         $savedArticle = $this->persistProcessor->process($data, $operation, $uriVariables, $context);
 
         // 3. On envoie le ticket dans le bus de messages avec l'ID tout frais
-        $this->messageBus->dispatch(new GenerateArticleMessage($savedArticle->getId(), $title));
+        $this->messageBus->dispatch(new GenerateArticleMessage($savedArticle->getId(), $data->getTitle(), $data->getTone(), $data->getLength()));
 
         // 4. On retourne la réponse instantanément à React !
         return $savedArticle;

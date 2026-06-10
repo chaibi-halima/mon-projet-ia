@@ -61,6 +61,12 @@ class Article
     #[Groups(['article:read'])]
     private ?\DateTimeImmutable $createdAt = null;
 
+    #[Groups(['article:write'])]
+    private ?string $tone = null;
+
+    #[Groups(['article:write'])]
+    private ?string $length = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -110,6 +116,28 @@ class Article
     public function setCreatedAt(\DateTimeImmutable $createdAt): static
     {
         $this->createdAt = $createdAt;
+        return $this;
+    }
+
+    public function getTone(): ?string
+    {
+        return $this->tone;
+    }
+
+    public function setTone(?string $tone): static
+    {
+        $this->tone = $tone;
+        return $this;
+    }
+
+    public function getLength(): ?string
+    {
+        return $this->length;
+    }
+
+    public function setLength(?string $length): static
+    {
+        $this->length = $length;
         return $this;
     }
 
