@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { 
   Card, Row, Col, Input, Select, Space, Spin, Empty, 
-  Tag, Typography, Button, Modal, Popconfirm, Form, message, Pagination 
-} from 'antd'; // 💡 Import de Pagination
+  Tag, Typography, Button, Modal, Popconfirm, Form, message, Pagination,
+  Statistic, Progress 
+} from 'antd';
 import { 
   CalendarOutlined, SearchOutlined, SortAscendingOutlined, 
-  TagsOutlined, BookOutlined, EditOutlined, DeleteOutlined 
+  TagsOutlined, BookOutlined, EditOutlined, DeleteOutlined,
+  ClockCircleOutlined, AppstoreOutlined
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 
@@ -16,13 +18,14 @@ function App() {
   const [articles, setArticles] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
   
   // États des filtres
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
-  // 💡 NOUVEAUX ÉTATS POUR LA PAGINATION SERVEUR
+  // États pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
@@ -37,9 +40,10 @@ function App() {
   const [editForm] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
 
+  // Relance le fetch discret toutes les 5 secondes pour l'IA
   useEffect(() => {
     const interval = setInterval(() => {
-      setTick(t => t + 1); // Fait évoluer le tick de +1 de façon asynchrone (aucun bug de render)
+      setTick(t => t + 1);
     }, 5000);
     
     return () => clearInterval(interval);
@@ -52,6 +56,7 @@ function App() {
       .catch(err => console.error("Erreur catégories:", err));
   }, []);
 
+  // Chargement dynamique des articles (Correction hydra + Gestion du 401)
   useEffect(() => {
     const token = localStorage.getItem('jwt_token');
     let url = `https://localhost/api/articles?page=${currentPage}`;
@@ -62,19 +67,27 @@ function App() {
     const order = sortBy === 'newest' ? 'desc' : 'asc';
     url += `&order[createdAt]=${order}`;
 
-    // 💡 AJOUT DU HEADER AVEC LE TOKEN ICI
     fetch(url, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/ld+json'
       }
     })
-      .then(res => res.json())
+      .then(res => {
+        // 💡 Si le token est expiré, on nettoie et on prévient l'utilisateur
+        if (res.status === 401) {
+          localStorage.removeItem('jwt_token');
+          messageApi.error("Votre session a expiré. Veuillez rafraîchir la page pour vous reconnecter.");
+          throw new Error("Session expirée (401)");
+        }
+        if (!res.ok) throw new Error("Erreur serveur");
+        return res.json();
+      })
       .then(data => {
-        // On met à jour l'état uniquement si on a reçu des membres
-        if (data.member) {
+        // 💡 Correction ici : Utilisation des vraies clés d'API Platform
+        if (data && data.member) {
           setArticles(data.member);
-          setTotalItems(data.totalItems || 0); 
+          setTotalItems(data.totalItems || 0);
         }
         setLoading(false); 
       })
@@ -82,7 +95,25 @@ function App() {
         console.error("Erreur articles:", err);
         setLoading(false);
       });
-  }, [currentPage, searchText, selectedCategory, sortBy, tick]);
+  }, [currentPage, searchText, selectedCategory, sortBy, tick, messageApi]);
+
+  // Chargement des statistiques
+  const loadStats = () => {
+    const token = localStorage.getItem('jwt_token');
+    fetch('https://localhost/api/stats', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => {
+        if (!res.ok) throw new Error("Impossible de charger les stats");
+        return res.json();
+      })
+      .then(data => setStats(data))
+      .catch(err => console.error("Erreur stats:", err));
+  };
+
+  useEffect(() => {
+    loadStats();
+  }, [articles]);
 
   // Suppression
   const handleDelete = (id) => {
@@ -94,11 +125,9 @@ function App() {
     .then(res => {
       if (res.ok) {
         messageApi.success('Article supprimé !');
-        // Si on supprime le dernier article d'une page, on recule d'une page
         if (articles.length === 1 && currentPage > 1) {
           setCurrentPage(currentPage - 1);
         } else {
-          // Sinon on rafraîchit simplement la page actuelle en changeant discrètement un état
           setCurrentPage(currentPage); 
         }
       }
@@ -143,6 +172,58 @@ function App() {
         <Paragraph type="secondary">Explorez votre catalogue propulsé par un filtrage ultra-performant côté serveur.</Paragraph>
       </div>
 
+      {/* 📊 LE TABLEAU DE BORD (STATISTIQUES) */}
+      {stats && (
+        <Row gutter={[16, 16]} style={{ marginBottom: '30px' }}>
+          <Col xs={24} sm={8}>
+            <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderRadius: '8px' }}>
+              <Statistic
+                title="Articles Totaux"
+                value={stats.totalArticles}
+                prefix={<BookOutlined style={{ color: '#1890ff' }} />}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={8}>
+            <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderRadius: '8px' }}>
+              <Statistic
+                title="Thématiques Explorées"
+                value={stats.totalCategories}
+                prefix={<AppstoreOutlined style={{ color: '#52c41a' }} />}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={8}>
+            <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderRadius: '8px' }}>
+              <Statistic
+                title="Temps de Lecture Estimé"
+                value={stats.readingTime}
+                suffix="min"
+                prefix={<ClockCircleOutlined style={{ color: '#faad14' }} />}
+              />
+            </Card>
+          </Col>
+
+          {stats.distribution && stats.distribution.length > 0 && (
+            <Col xs={24}>
+              <Card title="📈 Répartition par Catégorie" size="small" bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderRadius: '8px' }}>
+                <Row gutter={[20, 10]}>
+                  {stats.distribution.map(cat => (
+                    <Col xs={24} sm={12} md={6} key={cat.name}>
+                      <div style={{ marginBottom: '4px', display: 'flex', justifyWith: 'space-between', justifyContent: 'space-between' }}>
+                        <span>{cat.name}</span>
+                        <span style={{ fontWeight: 'bold' }}>{cat.count} ({cat.percentage}%)</span>
+                      </div>
+                      <Progress percent={cat.percentage} showInfo={false} strokeColor="#1890ff" status="active" />
+                    </Col>
+                  ))}
+                </Row>
+              </Card>
+            </Col>
+          )}
+        </Row>
+      )}
+
       {/* Barre de recherche */}
       <Card style={{ marginBottom: '30px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
         <Row gutter={[16, 16]} align="middle" justify="space-between">
@@ -167,7 +248,7 @@ function App() {
                   value={selectedCategory} 
                   onChange={(value) => {
                     setSelectedCategory(value);
-                    setCurrentPage(1); // 💡 On remet à la page 1 ici !
+                    setCurrentPage(1);
                     setLoading(true);
                   }} 
                   style={{ width: 180 }} 
@@ -185,7 +266,7 @@ function App() {
                   value={sortBy} 
                   onChange={(value) => {
                     setSortBy(value);
-                    setCurrentPage(1); // 💡 On remet à la page 1 ici !
+                    setCurrentPage(1);
                     setLoading(true);
                   }} 
                   style={{ width: 190 }} 
@@ -201,7 +282,7 @@ function App() {
         </Row>
       </Card>
 
-      {/* Grille d'articles avec Spinner de chargement pendant le fetch serveur */}
+      {/* Grille d'articles */}
       <Spin spinning={loading} tip="Chargement des données...">
         {articles.length === 0 ? (
           <Empty description="Aucun article trouvé." style={{ marginTop: '60px', marginBottom: '60px' }} />
@@ -212,7 +293,6 @@ function App() {
                 <Col xs={24} sm={12} lg={8} key={article.id}>
                   <Card
                     hoverable
-                    // 💡 NOUVEAU : Affiche l'image en haut de la carte
                     cover={
                       <img 
                         alt={article.title} 
@@ -255,34 +335,31 @@ function App() {
               ))}
             </Row>
 
-            {/* 💡 LE COMPOSANT DE PAGINATION APPARAÎT ICI */}
-            <div style={{ marginTop: '40px', textAlign: 'center', float: 'right' }}>
+            {/* Pagination alignée proprement */}
+            <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'flex-end' }}>
               <Pagination 
                 current={currentPage} 
-                pageSize={6} // Doit être identique à la configuration Symfony
+                pageSize={6} 
                 total={totalItems} 
                 onChange={(page) => setCurrentPage(page)}
-                showSizeChanger={false} // On bloque à 6 pour correspondre au serveur
+                showSizeChanger={false} 
               />
             </div>
           </>
         )}
       </Spin>
 
-      {/* Modales de lecture et d'édition (restent identiques) */}
+      {/* Modales */}
       <Modal open={isModalVisible} onCancel={() => setIsModalVisible(false)} footer={null} width={800}>
         {selectedArticle && (
           <>
-            {/* 💡 NOUVEAU : L'image en grand dans la modale */}
-            {selectedArticle && (
-              <div style={{ margin: '-24px -24px 20px -24px' }}>
-                <img 
-                  src={selectedArticle.imageUrl || DEFAULT_IMAGE} 
-                  alt="Couverture" 
-                  style={{ width: '100%', maxHeight: '300px', objectFit: 'cover' }} 
-                />
-              </div>
-            )}
+            <div style={{ margin: '-24px -24px 20px -24px' }}>
+              <img 
+                src={selectedArticle.imageUrl || DEFAULT_IMAGE} 
+                alt="Couverture" 
+                style={{ width: '100%', maxHeight: '300px', objectFit: 'cover' }} 
+              />
+            </div>
             
             <div style={{ marginBottom: '20px', borderBottom: '1px solid #f0f0f0', paddingBottom: '20px' }}>
               <Tag color={selectedArticle.category ? 'blue' : 'default'} style={{ marginBottom: '10px' }}>{selectedArticle.category?.name || 'Général'}</Tag>
