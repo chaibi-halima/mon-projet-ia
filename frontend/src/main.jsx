@@ -11,15 +11,19 @@ import AiForm from './AiForm.jsx';
 import LoginForm from './LoginForm.jsx';
 import './index.css'; 
 
+// 💡 On sépare à nouveau pour contourner le bug d'export de Vite
+import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client/core';
+import { ApolloProvider } from '@apollo/client/react';
+import { setContext } from '@apollo/client/link/context';
+
 const { Header, Content, Footer } = Layout;
 
 // --------------------------------------------------------
-// 💡 NOUVEAU COMPOSANT : Garde de sécurité pour les routes URL
+// 🛡️ GARDE DE SÉCURITÉ : Protection des routes URL
 // --------------------------------------------------------
 export function ProtectedRoute({ children }) {
   const { isAuthenticated } = useContext(AuthContext);
 
-  // Si l'utilisateur n'est pas connecté, on le redirige immédiatement vers le login
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
@@ -28,7 +32,7 @@ export function ProtectedRoute({ children }) {
 }
 
 // --------------------------------------------------------
-// COMPOSANT : Barre de navigation
+// 🧭 COMPOSANT : Barre de navigation
 // --------------------------------------------------------
 function Navigation() {
   const location = useLocation();
@@ -89,46 +93,67 @@ function Navigation() {
 }
 
 // --------------------------------------------------------
-// RENDU DE L'APPLICATION
+// 📡 CONFIGURATION APOLLO CLIENT (GRAPHQL)
+// --------------------------------------------------------
+const httpLink = createHttpLink({
+  uri: 'https://localhost/api/graphql',
+});
+
+const authLink = setContext((_, { headers }) => {
+  const token = localStorage.getItem('jwt_token');
+  return {
+    headers: {
+      ...headers,
+      authorization: token ? `Bearer ${token}` : "",
+    }
+  }
+});
+
+const client = new ApolloClient({
+  link: authLink.concat(httpLink),
+  cache: new InMemoryCache(),
+});
+
+// --------------------------------------------------------
+// 🪐 RENDU GLOBAL DE L'APPLICATION
 // --------------------------------------------------------
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ConfigProvider theme={{ token: { borderRadius: 8, colorPrimary: '#1677ff' } }}>
-      <AuthProvider>
-        <BrowserRouter>
-          <Layout style={{ minHeight: '100vh', background: '#f5f5f5' }}>
-            <Navigation />
-            
-            <Content style={{ padding: '40px 24px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
-              <Routes>
-                {/* Routes publiques */}
-                <Route path="/" element={<App />} />
-                <Route path="/login" element={<LoginForm />} />
-                
-                {/* 💡 Routes sécurisées par le composant ProtectedRoute */}
-                <Route path="/manuel" element={
-                  <ProtectedRoute>
-                    <ManualForm />
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/ai" element={
-                  <ProtectedRoute>
-                    <AiForm />
-                  </ProtectedRoute>
-                } />
+    <ApolloProvider client={client}>
+      <ConfigProvider theme={{ token: { borderRadius: 8, colorPrimary: '#1677ff' } }}>
+        <AuthProvider>
+          <BrowserRouter>
+            <Layout style={{ minHeight: '100vh', background: '#f5f5f5' }}>
+              <Navigation />
+              
+              <Content style={{ padding: '40px 24px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+                <Routes>
+                  <Route path="/" element={<App />} />
+                  <Route path="/login" element={<LoginForm />} />
+                  
+                  <Route path="/manuel" element={
+                    <ProtectedRoute>
+                      <ManualForm />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/ai" element={
+                    <ProtectedRoute>
+                      <AiForm />
+                    </ProtectedRoute>
+                  } />
 
-                {/* Redirection automatique pour toutes les URLs inconnues */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Content>
-            
-            <Footer style={{ textAlign: 'center', color: '#888' }}>
-              AI Content Generator ©{new Date().getFullYear()} - Propulsé par Symfony & React
-            </Footer>
-          </Layout>
-        </BrowserRouter>
-      </AuthProvider>
-    </ConfigProvider>
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Content>
+              
+              <Footer style={{ textAlign: 'center', color: '#888' }}>
+                AI Content Generator ©{new Date().getFullYear()} - Propulsé par Symfony & React
+              </Footer>
+            </Layout>
+          </BrowserRouter>
+        </AuthProvider>
+      </ConfigProvider>
+    </ApolloProvider>
   </React.StrictMode>
 );

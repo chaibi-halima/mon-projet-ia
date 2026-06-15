@@ -1,95 +1,77 @@
-import { useContext, useState, useEffect } from 'react';
-import { Form, Input, Button, Select, message } from 'antd';
-import { AuthContext } from './AuthContext.js';
+import { useMutation, useQuery } from '@apollo/client/react'; // 💡 Ajout d'Apollo
+import { useNavigate } from 'react-router-dom'; // 💡 Pour la redirection
+import { Form, Input, Button, Select, Card, Typography, message } from 'antd';
+import { CREATE_ARTICLE, GET_CATEGORIES } from './graphql/articleQueries';
+
+const { Title } = Typography;
 
 function ManualForm() {
   const [form] = Form.useForm();
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const { token } = useContext(AuthContext); // 💡 Récupération du jeton JWT
+  const navigate = useNavigate();
   const [messageApi, contextHolder] = message.useMessage();
 
-  // 1. Au chargement du composant, on récupère les catégories depuis l'API
-  useEffect(() => {
-    fetch('https://localhost/api/categories')
-      .then(res => res.json())
-      .then(data => {
-        const cats = data.member || data;
-        setCategories(cats);
-        
-        // 💡 Astuce : On trouve l'ID de la catégorie "Général" pour la mettre par défaut
-        const generalCat = cats.find(c => c.name === 'Général');
-        if (generalCat) {
-          form.setFieldsValue({ category: `/api/categories/${generalCat.id}` });
-        }
-      });
-  }, [form]);
+  // 1. Charger les vraies catégories pour le menu déroulant
+  const { data: categoriesData } = useQuery(GET_CATEGORIES);
+  const categories = categoriesData?.categories?.collection || [];
 
-  // 2. Fonction d'envoi du formulaire
+  // 2. Déclarer la mutation de création
+  const [createArticle, { loading }] = useMutation(CREATE_ARTICLE, {
+    onCompleted: () => {
+      messageApi.success('Article créé avec succès !');
+      form.resetFields();
+      navigate('/'); // 🚀 Redirection vers la bibliothèque
+    },
+    onError: (err) => {
+      messageApi.error(`Erreur lors de la création : ${err.message}`);
+    }
+  });
+
   const onFinish = (values) => {
-    setLoading(true);
-
-    // API Platform attend un IRI (le chemin d'API) pour les relations
-    const articleData = {
-      title: values.title,
-      content: values.content,
-      // value.category contient déjà la chaîne "/api/categories/X" grâce au composant Select
-      category: values.category ,
-      imageUrl: values.imageUrl || null // On peut aussi envoyer null si pas d'image
-    };
-
-    fetch('https://localhost/api/articles', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/ld+json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(articleData)
-    })
-    .then(res => {
-      if(res.ok) {
-        messageApi.success('Article créé avec succès !');
-        form.resetFields();
-      } else {
-        messageApi.error('Erreur lors de la création.')
+    createArticle({
+      variables: {
+        title: values.title,
+        content: values.content,
+        category: values.category || null, // IRI ou ID de la catégorie
+        imageUrl: values.imageUrl || null,
       }
-    })
-    .finally(() => setLoading(false));
+    });
   };
 
   return (
-    <>
-    {contextHolder}
-    <Form form={form} onFinish={onFinish} layout="vertical">
-      <Form.Item name="title" label="Titre" rules={[{ required: true }]}>
-        <Input />
-      </Form.Item>
+    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+      {contextHolder}
+      <Card style={{ borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+        <Title level={3} style={{ marginBottom: '24px' }}>✍️ Rédaction Manuelle</Title>
+        
+        <Form form={form} layout="vertical" onFinish={onFinish}>
+          <Form.Item name="title" label="Titre de l'article" rules={[{ required: true, message: 'Le titre est obligatoire' }]}>
+            <Input placeholder="Entrez le titre..." size="large" />
+          </Form.Item>
 
-      {/* 💡 LE MENU DÉROULANT DES CATÉGORIES */}
-      <Form.Item name="category" label="Catégorie">
-        <Select placeholder="Sélectionnez une catégorie (Défaut : Général)">
-          {categories.map(cat => (
-            // Dans API Platform, pour lier une entité, on passe son URI (ex: /api/categories/1)
-            <Select.Option key={cat.id} value={`/api/categories/${cat.id}`}>
-              {cat.name}
-            </Select.Option>
-          ))}
-        </Select>
-      </Form.Item>
+          <Form.Item name="category" label="Catégorie">
+            <Select placeholder="Sélectionnez une catégorie" size="large">
+              {categories.map(cat => (
+                <Select.Option key={cat.id} value={cat.id}>{cat.name}</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
 
-      <Form.Item name="content" label="Contenu" rules={[{ required: true }]}>
-        <Input.TextArea rows={4} />
-      </Form.Item>
+          <Form.Item name="content" label="Contenu de l'article" rules={[{ required: true, message: 'Le contenu est obligatoire' }]}>
+            <Input.TextArea rows={10} placeholder="Écrivez votre article ici (Markdown supporté)..." />
+          </Form.Item>
 
-      <Form.Item name="imageUrl" label="URL de l'image de couverture (Optionnel)">
-        <Input placeholder="https://..." />
-      </Form.Item>
+          <Form.Item name="imageUrl" label="URL de l'image de couverture">
+            <Input placeholder="https://images.unsplash.com/..." size="large" />
+          </Form.Item>
 
-      <Button type="primary" htmlType="submit" loading={loading}>
-        Créer l'article
-      </Button>
-    </Form>
-    </>
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Button type="primary" htmlType="submit" size="large" loading={loading}>
+              Publier l'article
+            </Button>
+          </Form.Item>
+        </Form>
+      </Card>
+    </div>
   );
 }
 

@@ -15,6 +15,10 @@ use Symfony\Component\Serializer\Attribute\Groups;
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
+use ApiPlatform\Metadata\GraphQl\Query;
+use ApiPlatform\Metadata\GraphQl\QueryCollection;
+use ApiPlatform\Metadata\GraphQl\Mutation;
+use ApiPlatform\Metadata\GraphQl\DeleteMutation;
 
 #[ORM\Entity(repositoryClass: ArticleRepository::class)]
 #[ORM\HasLifecycleCallbacks]
@@ -24,14 +28,20 @@ use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
         new Get(),
         new Delete(),
         new Put(),
-        // 1️⃣ ROUTE MANUELLE : /api/articles
         new Post(name: 'post_manual'), 
-        // 2️⃣ ROUTE IA : /api/articles/generate
         new Post(
+            uriTemplate: '/articles/generate',
             name: 'post_ai',
-            uriTemplate: '/articles/generate', // 💡 C'est "uriTemplate" qu'il faut écrire ici !
-            processor: ArticleAiProcessor::class
+            processor: ArticleAiProcessor::class,
+            priority: 10, // 👈 Crucial pour doubler la route /{id}
         )
+    ],
+    graphQlOperations: [
+        new QueryCollection(paginationType: 'page'), // ✨ Active le mode page pour la liste !
+        new Query(),
+        new Mutation(name: 'create'),
+        new Mutation(name: 'update'),
+        new DeleteMutation(name: 'delete')
     ],
     normalizationContext: ['groups' => ['article:read']],
     denormalizationContext: ['groups' => ['article:write']],

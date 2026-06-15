@@ -1,109 +1,127 @@
-import { useState, useEffect } from 'react';
-import { Form, Input, Button, message, Select, Card, Typography, Space } from 'antd';
-import { RobotOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { useState } from 'react';
+import { useQuery } from '@apollo/client/react';
+import { useNavigate } from 'react-router-dom';
+import { Form, Input, Button, Card, Typography, message, Select, Row, Col } from 'antd';
+import { GET_CATEGORIES } from './graphql/articleQueries';
+import { RobotOutlined } from '@ant-design/icons';
 
-const { Title, Text } = Typography;
+const { Title, Paragraph } = Typography;
 
 function AiForm() {
   const [form] = Form.useForm();
-  const [loading, setLoading] = useState(false);
-  const [categories, setCategories] = useState([]);
+  const navigate = useNavigate();
   const [messageApi, contextHolder] = message.useMessage();
+  const [generating, setGenerating] = useState(false);
 
-  useEffect(() => {
-    fetch('https://localhost/api/categories')
-      .then(res => res.json())
-      .then(data => setCategories(data.member || []));
-  }, []);
+  // Charger les catégories existantes via GraphQL pour le formulaire
+  const { data: categoriesData } = useQuery(GET_CATEGORIES);
+  const categories = categoriesData?.categories?.collection || [];
 
   const onFinish = async (values) => {
-    setLoading(true);
+    setGenerating(true);
     const token = localStorage.getItem('jwt_token');
 
+    // Préparation du payload attendu par le groupe 'article:write' de ton entité Symfony
+    const payload = {
+      title: values.title, // Sera utilisé comme "Topic" par ton Messenger
+      category: values.category ?? null, // IRI de la catégorie
+      tone: values.tone || 'professionnel',
+      length: values.length || 'moyen',
+      imageUrl: values.imageUrl || null
+    };
+
     try {
-      messageApi.loading({ content: 'Transmission au Worker en cours...', key: 'ai' });
-
-      // 💡 On inclut 'tone' et 'length' dans le JSON !
-      const articleData = {
-        title: values.topic, 
-        content: "Génération de l'article en cours par l'IA...", 
-        category: values.category,
-        tone: values.tone,     // 👈 Nouveau
-        length: values.length  // 👈 Nouveau
-      };
-
-      const apiResponse = await fetch('https://localhost/api/articles/generate', {
+      // 💡 L'URL exacte de ton uriTemplate API Platform
+      const response = await fetch('https://localhost/api/articles/generate', {
         method: 'POST',
-        headers: {
+        headers: { 
           'Content-Type': 'application/ld+json',
-          'Accept': 'application/ld+json',
-          'Authorization': `Bearer ${token}` 
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(articleData)
+        body: JSON.stringify(payload)
       });
+      
+      setGenerating(false);
 
-      if (apiResponse.ok) {
-        messageApi.success({ content: 'Tâche envoyée ! L\'article apparaîtra d\'ici peu.', key: 'ai', duration: 3 });
+      if (response.ok) {
+        messageApi.success("Ordre de génération envoyé à l'IA avec succès !");
         form.resetFields();
+        
+        // 🚀 Redirection immédiate vers la page d'accueil.
+        // Comme ton App.jsx a un pollInterval de 5s, l'article apparaîtra vide,
+        // puis se remplira automatiquement dès que Ollama aura fini son travail !
+        navigate('/'); 
       } else {
-        throw new Error("Erreur lors de l'envoi au serveur");
+        const errData = await response.json();
+        messageApi.error(`Erreur serveur : ${errData['hydra:description'] || 'Impossible de générer'}`);
       }
     } catch (error) {
-      messageApi.error({ content: `Erreur : ${error.message}`, key: 'ai', duration: 5 });
-    } finally {
-      setLoading(false);
+      setGenerating(false);
+      messageApi.error("Erreur réseau lors de la communication avec l'API.");
     }
   };
 
   return (
-    <Card style={{ maxWidth: 600, margin: '0 auto', marginTop: '40px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
       {contextHolder}
-      <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-        <RobotOutlined style={{ fontSize: '48px', color: '#1890ff', marginBottom: '16px' }} />
-        <Title level={3} style={{ marginTop: 0 }}>Assistant de Rédaction IA</Title>
-        <Text type="secondary">Choisissez vos paramètres, l'IA s'occupe du reste.</Text>
-      </div>
+      <Card style={{ borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <RobotOutlined style={{ fontSize: '40px', color: '#1677ff', marginBottom: '12px' }} />
+          <Title level={3} style={{ marginTop: 0 }}>Génération par Intelligence Artificielle</Title>
+          <Paragraph type="secondary">
+            Saisissez votre sujet. Le State Processor et Symfony Messenger s'occupent de générer l'article via Ollama en arrière-plan.
+          </Paragraph>
+        </div>
+        
+        <Form form={form} layout="vertical" onFinish={onFinish} defaultvalues={{ tone: 'professionnel', length: 'moyen' }}>
+          
+          <Form.Item name="title" label="Sujet de l'article (Sera fourni à l'IA)" rules={[{ required: true, message: 'Veuillez saisir un sujet' }]}>
+            <Input placeholder="Ex: Les avancées de la physique quantique ou L'impact du télétravail" size="large" />
+          </Form.Item>
 
-      <Form form={form} layout="vertical" onFinish={onFinish} initialValues={{ tone: 'professionnel', length: 'moyen' }}>
-        <Form.Item name="topic" label="Sujet de l'article" rules={[{ required: true, message: 'Le sujet est requis.' }]}>
-          <Input placeholder="Ex: Les avantages de Docker en 2026..." size="large" />
-        </Form.Item>
-
-        <Form.Item name="category" label="Catégorie" rules={[{ required: true }]}>
-          <Select placeholder="Sélectionnez une catégorie" size="large">
-            {categories.map(cat => (
-              <Select.Option key={cat.id} value={`/api/categories/${cat.id}`}>{cat.name}</Select.Option>
-            ))}
-          </Select>
-        </Form.Item>
-
-        {/* 💡 NOUVEAUX CHAMPS */}
-        <Space style={{ width: '100%' }} size="middle">
-          <Form.Item name="tone" label="Ton de l'article" style={{ width: '100%' }}>
-            <Select size="large">
-              <Select.Option value="professionnel">💼 Professionnel</Select.Option>
-              <Select.Option value="humoristique">😂 Humoristique</Select.Option>
-              <Select.Option value="vulgarisation">🎓 Vulgarisation simple</Select.Option>
-              <Select.Option value="poétique">✨ Poétique</Select.Option>
+          <Form.Item name="category" label="Catégorie cible">
+            <Select placeholder="Sélectionnez la catégorie de l'article" size="large" allowClear>
+              {categories.map(cat => (
+                <Select.Option key={cat.id} value={cat.id}>{cat.name}</Select.Option>
+              ))}
             </Select>
           </Form.Item>
 
-          <Form.Item name="length" label="Longueur" style={{ width: '100%' }}>
-            <Select size="large">
-              <Select.Option value="très court (1 paragraphe)">Court</Select.Option>
-              <Select.Option value="moyen (3 paragraphes)">Moyen</Select.Option>
-              <Select.Option value="long et détaillé (5 paragraphes)">Long</Select.Option>
-            </Select>
-          </Form.Item>
-        </Space>
+          {/* 🌟 NOUVEAU : Sélection du TON et de la LONGUEUR pour correspondre à ton Handler PHP */}
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="tone" label="Ton de l'écriture" initialValue="professionnel">
+                <Select size="large">
+                  <Select.Option value="professionnel">💼 Professionnel</Select.Option>
+                  <Select.Option value="amical">😊 Amical / Décontracté</Select.Option>
+                  <Select.Option value="technique">🔬 Technique / Scientifique</Select.Option>
+                  <Select.Option value="enthousiaste">🔥 Enthousiaste / Vendeur</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="length" label="Longueur souhaitée" initialValue="moyen">
+                <Select size="large">
+                  <Select.Option value="court">⏱️ Court (environ 200 mots)</Select.Option>
+                  <Select.Option value="moyen">📝 Moyen (environ 500 mots)</Select.Option>
+                  <Select.Option value="long">📚 Long (1000+ mots)</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
 
-        <Form.Item style={{ marginTop: '20px', marginBottom: 0 }}>
-          <Button type="primary" htmlType="submit" size="large" block loading={loading} icon={<ThunderboltOutlined />}>
-            Générer l'article
-          </Button>
-        </Form.Item>
-      </Form>
-    </Card>
+          <Form.Item name="imageUrl" label="URL de l'image de couverture (Optionnel)">
+            <Input placeholder="https://images.unsplash.com/... (Laissé vide, Picsum s'en chargera)" size="large" />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right', marginTop: '24px' }}>
+            <Button type="primary" htmlType="submit" size="large" icon={<RobotOutlined />} loading={generating}>
+              {generating ? "Envoi à l'IA..." : "Lancer la génération asynchrone"}
+            </Button>
+          </Form.Item>
+        </Form>
+      </Card>
+    </div>
   );
 }
 

@@ -1,35 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState, useContext } from 'react';
+import { useQuery, useMutation } from '@apollo/client/react';
 import { 
   Card, Row, Col, Input, Select, Space, Spin, Empty, 
-  Tag, Typography, Button, Modal, Popconfirm, Form, message, Pagination,
-  Statistic, Progress 
+  Tag, Typography, Button, Modal, Popconfirm, Form, message, Pagination, Statistic 
 } from 'antd';
 import { 
   CalendarOutlined, SearchOutlined, SortAscendingOutlined, 
   TagsOutlined, BookOutlined, EditOutlined, DeleteOutlined,
-  ClockCircleOutlined, AppstoreOutlined
+  FileTextOutlined
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
+import { GET_ARTICLES, GET_CATEGORIES, UPDATE_ARTICLE, DELETE_ARTICLE } from './graphql/articleQueries';
+import { AuthContext } from './AuthContext.js'; // 💡 Pour gérer l'expiration proprement
 
 const DEFAULT_IMAGE = 'https://placehold.co/800x400/f0f2f5/8c8c8c?text=Image+non+fournie';
 const { Title, Paragraph } = Typography;
 
 function App() {
-  const [articles, setArticles] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState(null);
-  
-  // États des filtres
+  // États des filtres et pagination
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
-
-  // États pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-
-  const [tick, setTick] = useState(0);
 
   // États des Modales
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -39,126 +31,94 @@ function App() {
   
   const [editForm] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
+  const { logout } = useContext(AuthContext);
+  const token = localStorage.getItem('jwt_token');
 
-  // Relance le fetch discret toutes les 5 secondes pour l'IA
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTick(t => t + 1);
-    }, 5000);
-    
-    return () => clearInterval(interval);
-  }, []);
+  // --------------------------------------------------------
+  // 📡 REQUÊTES GRAPHQL (APOLLO CLIENT)
+  // --------------------------------------------------------
+  
+  // 📡 MUTATIONS GRAPHQL
+  const [mutateDelete] = useMutation(DELETE_ARTICLE, {
+    onCompleted: () => {
+      messageApi.success('Article supprimé !');
+      refetchArticles(); // Force la grille à se recharger proprement
+    },
+    onError: (err) => messageApi.error(`Erreur de suppression : ${err.message}`)
+  });
 
-  useEffect(() => {
-    fetch('https://localhost/api/categories')
-      .then(res => res.json())
-      .then(data => setCategories(data.member || data))
-      .catch(err => console.error("Erreur catégories:", err));
-  }, []);
+  const [mutateUpdate] = useMutation(UPDATE_ARTICLE, {
+    onCompleted: () => {
+      messageApi.success('Article modifié !');
+      refetchArticles(); // Synchronise la modification à l'écran
+      setIsEditModalVisible(false);
+    },
+    onError: (err) => messageApi.error(`Erreur de modification : ${err.message}`)
+  });
 
-  // Chargement dynamique des articles (Correction hydra + Gestion du 401)
-  useEffect(() => {
-    const token = localStorage.getItem('jwt_token');
-    let url = `https://localhost/api/articles?page=${currentPage}`;
-    
-    if (searchText) url += `&title=${encodeURIComponent(searchText)}`;
-    if (selectedCategory && selectedCategory !== 'all') url += `&category.name=${encodeURIComponent(selectedCategory)}`;
-    
-    const order = sortBy === 'newest' ? 'desc' : 'asc';
-    url += `&order[createdAt]=${order}`;
-
-    fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/ld+json'
+  // 1. Chargement des articles (avec filtres, tri et polling de 5s)
+  const { loading, data, refetch: refetchArticles } = useQuery(GET_ARTICLES, {
+    variables: { 
+      page: currentPage,
+      title: searchText || null,
+      categoryName: selectedCategory === 'all' ? null : selectedCategory,
+      order: sortBy === 'newest' ? [{ createdAt: 'desc' }] : [{ createdAt: 'asc' }]
+    },
+    pollInterval: token ? 5000 : 0, // 🔄 Remplace ton ancien setInterval de 5s !
+    skip: !token, // 🛑 Bloque la requête et vide l'écran si pas de token
+    onError: (err) => {
+      if (err.message.includes('401') || err.networkError?.statusCode === 401) {
+        localStorage.removeItem('jwt_token');
+        logout(); 
+        messageApi.error("Votre session a expiré. Veuillez vous reconnecter.");
       }
-    })
-      .then(res => {
-        // 💡 Si le token est expiré, on nettoie et on prévient l'utilisateur
-        if (res.status === 401) {
-          localStorage.removeItem('jwt_token');
-          messageApi.error("Votre session a expiré. Veuillez rafraîchir la page pour vous reconnecter.");
-          throw new Error("Session expirée (401)");
-        }
-        if (!res.ok) throw new Error("Erreur serveur");
-        return res.json();
-      })
-      .then(data => {
-        // 💡 Correction ici : Utilisation des vraies clés d'API Platform
-        if (data && data.member) {
-          setArticles(data.member);
-          setTotalItems(data.totalItems || 0);
-        }
-        setLoading(false); 
-      })
-      .catch(err => {
-        console.error("Erreur articles:", err);
-        setLoading(false);
-      });
-  }, [currentPage, searchText, selectedCategory, sortBy, tick, messageApi]);
+    }
+  });
 
-  // Chargement des statistiques
-  const loadStats = () => {
-    const token = localStorage.getItem('jwt_token');
-    fetch('https://localhost/api/stats', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => {
-        if (!res.ok) throw new Error("Impossible de charger les stats");
-        return res.json();
-      })
-      .then(data => setStats(data))
-      .catch(err => console.error("Erreur stats:", err));
-  };
+  // 2. Chargement des catégories pour le filtre et les statistiques
+  const { data: categoriesData } = useQuery(GET_CATEGORIES, {
+    skip: !token,
+  });
 
-  useEffect(() => {
-    loadStats();
-  }, [articles]);
+  // Extraction des données GraphQL pour ton rendu
+  const articles = data?.articles?.collection || [];
+  const totalItems = data?.articles?.paginationInfo?.totalCount || 0;
+  
+  const categories = categoriesData?.categories?.collection || [];
 
+  // ⚡ GESTION DES ACTIONS (VERSION 100% GRAPHQL)
+  
   // Suppression
   const handleDelete = (id) => {
-    const token = localStorage.getItem('jwt_token');
-    fetch(`https://localhost/api/articles/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(res => {
-      if (res.ok) {
-        messageApi.success('Article supprimé !');
-        if (articles.length === 1 && currentPage > 1) {
-          setCurrentPage(currentPage - 1);
-        } else {
-          setCurrentPage(currentPage); 
-        }
-      }
-    });
+    mutateDelete({ variables: { id: id } });
+
+    // Si on supprime le dernier article d'une page, on recule d'une page
+    if (articles.length === 1 && currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
   };
 
-  // Édition
+  // Ouverture modale édition
   const openEditModal = (article) => {
     setEditingArticle(article);
     editForm.setFieldsValue({
       title: article.title,
       content: article.content,
-      category: article.category ? article.category['@id'] : undefined,
+      category: article.category ? article.category.id : undefined, // 💡 GraphQL utilise .id (qui est l'IRI sous API Platform)
       imageUrl: article.imageUrl
     });
     setIsEditModalVisible(true);
   };
 
+  // Soumission édition
   const handleEditSubmit = (values) => {
-    const token = localStorage.getItem('jwt_token');
-    fetch(`https://localhost/api/articles/${editingArticle.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/ld+json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify(values)
-    })
-    .then(res => res.json())
-    .then(updatedArticle => {
-      if (updatedArticle['@id']) {
-        messageApi.success('Article modifié !');
-        setArticles(articles.map(a => a.id === editingArticle.id ? updatedArticle : a));
-        setIsEditModalVisible(false);
+    mutateUpdate({
+      variables: {
+        id: editingArticle.id,
+        title: values.title,
+        content: values.content,
+        category: values.category || null, // IRI de la catégorie (ex: "/api/categories/3")
+        imageUrl: values.imageUrl || null
       }
     });
   };
@@ -172,55 +132,36 @@ function App() {
         <Paragraph type="secondary">Explorez votre catalogue propulsé par un filtrage ultra-performant côté serveur.</Paragraph>
       </div>
 
-      {/* 📊 LE TABLEAU DE BORD (STATISTIQUES) */}
-      {stats && (
-        <Row gutter={[16, 16]} style={{ marginBottom: '30px' }}>
-          <Col xs={24} sm={8}>
-            <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderRadius: '8px' }}>
-              <Statistic
-                title="Articles Totaux"
-                value={stats.totalArticles}
-                prefix={<BookOutlined style={{ color: '#1890ff' }} />}
+      {/* --------------------------------------------------------
+          📊 BLOC STATISTIQUES RECONSTRUIT (DYNAMIQUE)
+         -------------------------------------------------------- */}
+      {token && (
+        <Row gutter={[24, 24]} style={{ marginBottom: '32px' }}>
+          <Col xs={24} sm={12} md={12}>
+            <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', height: '100%' }}>
+              <Statistic 
+                title="Total des Articles" 
+                value={totalItems} 
+                loading={loading && articles.length === 0}
+                prefix={<FileTextOutlined style={{ color: '#1677ff' }} />} 
               />
             </Card>
           </Col>
-          <Col xs={24} sm={8}>
-            <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderRadius: '8px' }}>
-              <Statistic
-                title="Thématiques Explorées"
-                value={stats.totalCategories}
-                prefix={<AppstoreOutlined style={{ color: '#52c41a' }} />}
-              />
+          <Col xs={24} sm={12} md={12}>
+            <Card title="Répartition par catégories" bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', height: '100%' }} size="small">
+              <Space wrap style={{ marginTop: '4px' }}>
+                {categories.length === 0 ? (
+                  <span style={{ color: '#888' }}>Aucune catégorie</span>
+                ) : (
+                  categories.map(cat => (
+                    <Tag color="blue" key={cat.id} style={{ padding: '4px 8px', fontSize: '13px' }}>
+                      <strong>{cat.name}</strong> : {cat.articles?.paginationInfo?.totalCount || 0}
+                    </Tag>
+                  ))
+                )}
+              </Space>
             </Card>
           </Col>
-          <Col xs={24} sm={8}>
-            <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderRadius: '8px' }}>
-              <Statistic
-                title="Temps de Lecture Estimé"
-                value={stats.readingTime}
-                suffix="min"
-                prefix={<ClockCircleOutlined style={{ color: '#faad14' }} />}
-              />
-            </Card>
-          </Col>
-
-          {stats.distribution && stats.distribution.length > 0 && (
-            <Col xs={24}>
-              <Card title="📈 Répartition par Catégorie" size="small" bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)', borderRadius: '8px' }}>
-                <Row gutter={[20, 10]}>
-                  {stats.distribution.map(cat => (
-                    <Col xs={24} sm={12} md={6} key={cat.name}>
-                      <div style={{ marginBottom: '4px', display: 'flex', justifyWith: 'space-between', justifyContent: 'space-between' }}>
-                        <span>{cat.name}</span>
-                        <span style={{ fontWeight: 'bold' }}>{cat.count} ({cat.percentage}%)</span>
-                      </div>
-                      <Progress percent={cat.percentage} showInfo={false} strokeColor="#1890ff" status="active" />
-                    </Col>
-                  ))}
-                </Row>
-              </Card>
-            </Col>
-          )}
         </Row>
       )}
 
@@ -230,11 +171,11 @@ function App() {
           <Col xs={24} md={10}>
             <Input
               placeholder="Rechercher par titre..."
-              prefix={<SearchOutlined />} value={searchText}
+              prefix={<SearchOutlined />} 
+              value={searchText}
               onChange={(e) => {
                 setSearchText(e.target.value);
                 setCurrentPage(1);
-                setLoading(true);
               }}
               allowClear
               size="large"
@@ -249,7 +190,6 @@ function App() {
                   onChange={(value) => {
                     setSelectedCategory(value);
                     setCurrentPage(1);
-                    setLoading(true);
                   }} 
                   style={{ width: 180 }} 
                   size="large"
@@ -267,7 +207,6 @@ function App() {
                   onChange={(value) => {
                     setSortBy(value);
                     setCurrentPage(1);
-                    setLoading(true);
                   }} 
                   style={{ width: 190 }} 
                   size="large" 
@@ -282,9 +221,13 @@ function App() {
         </Row>
       </Card>
 
-      {/* Grille d'articles */}
-      <Spin spinning={loading} tip="Chargement des données...">
-        {articles.length === 0 ? (
+      {/* Grille d'articles avec Spinner de chargement Apollo */}
+      <Spin spinning={loading && articles.length === 0} tip="Chargement des données...">
+        {!token ? (
+          <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+            <Empty description="Veuillez vous connecter à l'Espace Admin pour consulter la bibliothèque d'articles." />
+          </Card>
+        ) : articles.length === 0 ? (
           <Empty description="Aucun article trouvé." style={{ marginTop: '60px', marginBottom: '60px' }} />
         ) : (
           <>
@@ -314,10 +257,12 @@ function App() {
                         </span>
                       </div>
 
-                      <Title level={4} style={{ marginTop: 0, marginBottom: '10px' }}>{article.title}</Title>
+                      <Title level={4} style={{ marginTop: 0, marginBottom: '10px', height: '50px', overflow: 'hidden', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        {article.title}
+                      </Title>
                       
                       <Paragraph type="secondary" style={{ marginBottom: '20px' }}>
-                        {article.content ? article.content.substring(0, 120) + '...' : ''}
+                        {article.content ? article.content.replace(/[#*`\-_]/g, '').substring(0, 120) + '...' : ''}
                       </Paragraph>
                     </div>
                     
@@ -335,7 +280,7 @@ function App() {
               ))}
             </Row>
 
-            {/* Pagination alignée proprement */}
+            {/* Pagination de ton composant d'origine */}
             <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'flex-end' }}>
               <Pagination 
                 current={currentPage} 
@@ -349,7 +294,7 @@ function App() {
         )}
       </Spin>
 
-      {/* Modales */}
+      {/* Modales de lecture et d'édition */}
       <Modal open={isModalVisible} onCancel={() => setIsModalVisible(false)} footer={null} width={800}>
         {selectedArticle && (
           <>
@@ -376,7 +321,7 @@ function App() {
           <Form.Item name="title" label="Titre" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="category" label="Catégorie">
             <Select placeholder="Sélectionnez une catégorie">
-              {categories.map(cat => <Select.Option key={cat.id} value={cat['@id']}>{cat.name}</Select.Option>)}
+              {categories.map(cat => <Select.Option key={cat.id} value={cat.id}>{cat.name}</Select.Option>)}
             </Select>
           </Form.Item>
           <Form.Item name="content" label="Contenu" rules={[{ required: true }]}><Input.TextArea rows={8} /></Form.Item>
