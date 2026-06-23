@@ -1,0 +1,25 @@
+# config/packages/workflow.yaml
+framework:
+    workflows:
+        article_generation:
+            type: 'state_machine'
+            marking_store:
+                type: 'method'
+                property: 'status' # Symfony appellera getStatus() et setStatus()
+            supports:
+                - App\Entity\Article
+            places:
+                - pending      # En attente dans la file Messenger
+                - processing   # L'IA est en train de générer le contenu
+                - success      # Génération réussie et enregistrée
+                - failed       # Erreur (timeout, crash Ollama, etc.)
+            transitions:
+                start_processing:
+                    from: pending
+                    to:   processing
+                mark_success:
+                    from: processing
+                    to:   success
+                mark_failed:
+                    from: [pending, processing]
+                    to:   failed

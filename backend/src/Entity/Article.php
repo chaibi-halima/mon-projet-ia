@@ -83,6 +83,9 @@ class Article
     #[Groups(['article:read', 'article:write'])]
     private ?string $imageUrl = null;
 
+    #[ORM\Column(length: 255, options: ['default' => 'pending'])]
+    private ?string $status = 'pending'; // État initial obligatoire
+
     public function getId(): ?int
     {
         return $this->id;
@@ -166,6 +169,17 @@ class Article
     {
         $this->imageUrl = $imageUrl;
 
+        return $this;
+    }
+
+    public function getStatus(): ?string
+    {
+        return $this->status;
+    }
+
+    public function setStatus(string $status): self
+    {
+        $this->status = $status;
         return $this;
     }
 

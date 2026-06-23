@@ -15,5 +15,22 @@
             "username": "root",
             "password": "root"
         }
-    ]
+    ],
+    
+    // 🚀 Configuration PHP 8 & Intelephense
+    "intelephense.environment.phpVersion": "8.5.6",
+    "php.suggest.basic": false,
+    "php.validate.enable": false,
+    "php.validate.executablePath": "/usr/bin/php8.4",
+    "php.executablePath": "/usr/bin/php8.4",
+
+    // 🎨 Confort visuel pour les structures de code complexes
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    
+    // 📐 Auto-formatage du code PHP 8 propre au survol/sauvegarde
+    "[php]": {
+        "editor.defaultFormatter": "bmewburn.vscode-intelephense-client",
+        "editor.formatOnSave": true
+    }
 }
