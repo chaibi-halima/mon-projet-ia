@@ -2,23 +2,23 @@
 
 namespace App\Entity;
 
-use App\Repository\ArticleRepository;
-use ApiPlatform\Metadata\ApiResource;
-use Doctrine\ORM\Mapping as ORM;
-use App\State\ArticleAiProcessor;
-use ApiPlatform\Metadata\Post;
-use ApiPlatform\Metadata\GetCollection;
-use ApiPlatform\Metadata\Get;
-use ApiPlatform\Metadata\Delete;
-use ApiPlatform\Metadata\Put;
-use Symfony\Component\Serializer\Attribute\Groups;
-use ApiPlatform\Metadata\ApiFilter;
-use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\GraphQl\DeleteMutation;
+use ApiPlatform\Metadata\GraphQl\Mutation;
 use ApiPlatform\Metadata\GraphQl\Query;
 use ApiPlatform\Metadata\GraphQl\QueryCollection;
-use ApiPlatform\Metadata\GraphQl\Mutation;
-use ApiPlatform\Metadata\GraphQl\DeleteMutation;
+use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Put;
+use App\Repository\ArticleRepository;
+use App\State\ArticleAiProcessor;
+use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Attribute\Groups;
 
 #[ORM\Entity(repositoryClass: ArticleRepository::class)]
 #[ORM\HasLifecycleCallbacks]
@@ -28,20 +28,20 @@ use ApiPlatform\Metadata\GraphQl\DeleteMutation;
         new Get(),
         new Delete(),
         new Put(),
-        new Post(name: 'post_manual'), 
+        new Post(name: 'post_manual'),
         new Post(
             uriTemplate: '/articles/generate',
             name: 'post_ai',
             processor: ArticleAiProcessor::class,
             priority: 10, // 👈 Crucial pour doubler la route /{id}
-        )
+        ),
     ],
     graphQlOperations: [
         new QueryCollection(paginationType: 'page'), // ✨ Active le mode page pour la liste !
         new Query(),
         new Mutation(name: 'create'),
         new Mutation(name: 'update'),
-        new DeleteMutation(name: 'delete')
+        new DeleteMutation(name: 'delete'),
     ],
     normalizationContext: ['groups' => ['article:read']],
     denormalizationContext: ['groups' => ['article:write']],
@@ -84,7 +84,7 @@ class Article
     private ?string $imageUrl = null;
 
     #[ORM\Column(length: 255, options: ['default' => 'pending'])]
-    private ?string $status = 'pending'; // État initial obligatoire
+    private string $status = 'pending'; // État initial obligatoire
 
     public function getId(): ?int
     {
@@ -135,6 +135,7 @@ class Article
     public function setCreatedAt(\DateTimeImmutable $createdAt): static
     {
         $this->createdAt = $createdAt;
+
         return $this;
     }
 
@@ -146,6 +147,7 @@ class Article
     public function setTone(?string $tone): static
     {
         $this->tone = $tone;
+
         return $this;
     }
 
@@ -157,6 +159,7 @@ class Article
     public function setLength(?string $length): static
     {
         $this->length = $length;
+
         return $this;
     }
 
@@ -172,7 +175,7 @@ class Article
         return $this;
     }
 
-    public function getStatus(): ?string
+    public function getStatus(): string
     {
         return $this->status;
     }
@@ -180,13 +183,14 @@ class Article
     public function setStatus(string $status): self
     {
         $this->status = $status;
+
         return $this;
     }
 
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
-        if ($this->createdAt === null) {
+        if (null === $this->createdAt) {
             $this->createdAt = new \DateTimeImmutable();
         }
     }
@@ -194,7 +198,7 @@ class Article
     #[ORM\PreUpdate]
     public function onPreUpdate(): void
     {
-        if ($this->createdAt === null) {
+        if (null === $this->createdAt) {
             $this->createdAt = new \DateTimeImmutable();
         }
     }

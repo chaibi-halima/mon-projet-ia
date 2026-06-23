@@ -2,7 +2,8 @@
 
 namespace App\Dto;
 
-class OllamaArticleDto {
+class OllamaArticleDto
+{
     public string $seo_title;
     public string $content;
     /** @var string[] */

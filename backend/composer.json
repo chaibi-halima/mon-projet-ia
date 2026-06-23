@@ -83,7 +83,20 @@
         ],
         "post-update-cmd": [
             "@auto-scripts"
-        ]
+        ],
+        "test": [
+            "@test:lint",
+            "@test:php-cs-fixer",
+            "@test:phpstan",
+            "@test:phpunit"
+        ],
+        "test:lint": "php bin/console lint:container && php bin/console lint:yaml config",
+        "test:php-cs-fixer": "vendor/bin/php-cs-fixer fix src --dry-run --diff",
+        "fix": "vendor/bin/php-cs-fixer fix src",
+        "test:phpmd": "vendor/bin/phpmd src text phpmd.xml",
+        "test:phpstan": "vendor/bin/phpstan analyse --memory-limit=1G",
+        "test:security-checker": "composer audit",
+        "test:phpunit": "vendor/bin/phpunit"
     },
     "conflict": {
         "symfony/symfony": "*"
@@ -97,6 +110,11 @@
     },
     "require-dev": {
         "doctrine/doctrine-fixtures-bundle": "^4.3",
+        "friendsofphp/php-cs-fixer": "^3.95",
+        "phpmd/phpmd": "^2.5",
+        "phpstan/phpstan": "^2.2",
+        "phpstan/phpstan-doctrine": "^2.0",
+        "phpunit/phpunit": "^13.2",
         "symfony/maker-bundle": "^1.67",
         "symfony/stopwatch": "8.0.*",
         "symfony/web-profiler-bundle": "8.0.*"

@@ -2,9 +2,9 @@
 
 namespace App\State;
 
+use ApiPlatform\Doctrine\Common\State\PersistProcessor;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
-use ApiPlatform\Doctrine\Common\State\PersistProcessor;
 use App\Entity\Article;
 use App\Message\GenerateArticleMessage;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -13,8 +13,9 @@ class ArticleAiProcessor implements ProcessorInterface
 {
     public function __construct(
         private PersistProcessor $persistProcessor,
-        private MessageBusInterface $messageBus // 💡 On injecte le bus de messages
-    ) {}
+        private MessageBusInterface $messageBus, // 💡 On injecte le bus de messages
+    ) {
+    }
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): mixed
     {

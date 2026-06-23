@@ -39,7 +39,7 @@ class AppFixtures extends Fixture
             'admin'
         );
         $user->setPassword($hashedPassword);
-        
+
         $manager->persist($user);
 
         // On valide tout en base de données

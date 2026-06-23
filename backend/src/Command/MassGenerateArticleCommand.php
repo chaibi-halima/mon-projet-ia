@@ -21,7 +21,7 @@ class MassGenerateArticleCommand extends Command
     // 💡 1. Les services (BDD, Bus) s'injectent TOUJOURS dans le constructeur
     public function __construct(
         private EntityManagerInterface $entityManager,
-        private MessageBusInterface $messageBus
+        private MessageBusInterface $messageBus,
     ) {
         parent::__construct();
     }
@@ -45,26 +45,26 @@ class MassGenerateArticleCommand extends Command
         $articlesEnAttente = [];
 
         // Création des articles en base de données
-        for ($i = 1; $i <= $count; $i++) {
+        for ($i = 1; $i <= $count; ++$i) {
             $article = new Article();
             $titre = sprintf('%s - Idée n°%d', $subject, $i);
-            
+
             $article->setTitle($titre);
             $article->setContent('⏳ En attente de rédaction par l\'IA (CLI)...');
-            
+
             $this->entityManager->persist($article);
             $articlesEnAttente[] = $article;
         }
-        
+
         $this->entityManager->flush();
 
         // Envoi des tickets au Worker
         foreach ($articlesEnAttente as $article) {
             $this->messageBus->dispatch(new GenerateArticleMessage($article->getId(), $article->getTitle()));
-            $output->writeln("Ticket envoyé pour l'article ID : " . $article->getId());
+            $output->writeln("Ticket envoyé pour l'article ID : ".$article->getId());
         }
 
-        $output->writeln("<info>✅ Terminé ! Le Worker prend le relais en tâche de fond.</info>");
+        $output->writeln('<info>✅ Terminé ! Le Worker prend le relais en tâche de fond.</info>');
 
         return Command::SUCCESS;
     }

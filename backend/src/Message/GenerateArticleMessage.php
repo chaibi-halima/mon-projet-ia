@@ -8,8 +8,9 @@ class GenerateArticleMessage
         private int $articleId,
         private string $topic,
         public ?string $tone = 'professionnel',
-        public ?string $length = 'moyen'
-    ) {}
+        public ?string $length = 'moyen',
+    ) {
+    }
 
     public function getArticleId(): int
     {

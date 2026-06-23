@@ -34,7 +34,7 @@ class StatsController extends AbstractController
                 $distribution[] = [
                     'name' => $category->getName(),
                     'count' => $count,
-                    'percentage' => $totalArticles > 0 ? round(($count / $totalArticles) * 100) : 0
+                    'percentage' => $totalArticles > 0 ? round(($count / $totalArticles) * 100) : 0,
                 ];
             }
         }
@@ -43,7 +43,7 @@ class StatsController extends AbstractController
             'totalArticles' => $totalArticles,
             'totalCategories' => $totalCategories,
             'readingTime' => $readingTime,
-            'distribution' => $distribution
+            'distribution' => $distribution,
         ]);
     }
 }
