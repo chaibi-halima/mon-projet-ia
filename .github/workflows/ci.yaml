@@ -1,6 +1,5 @@
 name: Continuous Integration
 
-# 1. On déclenche la CI à chaque push ou pull request sur la branche principale
 on:
   push:
     branches: [ main, master, develop ]
@@ -12,18 +11,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Étape 1 : On récupère le code de ton dépôt GitHub
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Étape 2 : On démarre tes conteneurs Docker (comme sur ta machine !)
       - name: Start Docker Compose services
         run: docker compose up -d --build
 
-      # Étape 3 : On attend que la base de données soit prête si nécessaire
       - name: Wait for services
         run: sleep 10
 
-      # Étape 4 : L'apothéose : On lance TOUS tes tests d'un coup dans le conteneur
+      # 🚀 Correction ici : on passe de "exec" à "run --rm"
       - name: Run Quality and Security Tests
-        run: docker compose exec -T webgateway composer test
+        run: docker compose run --rm webgateway composer test
+
+      # 🔍 En cas d'échec, cette étape affiche les logs Docker pour débugger instantanément
+      - name: Print container logs on failure
+        if: failure()
+        run: docker compose logs
