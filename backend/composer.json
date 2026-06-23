@@ -30,6 +30,7 @@
         "symfony/framework-bundle": "8.0.*",
         "symfony/http-client": "8.0.*",
         "symfony/messenger": "8.0.*",
+        "symfony/monolog-bundle": "^4.0",
         "symfony/property-access": "8.0.*",
         "symfony/property-info": "8.0.*",
         "symfony/runtime": "8.0.*",
@@ -95,6 +96,8 @@
     },
     "require-dev": {
         "doctrine/doctrine-fixtures-bundle": "^4.3",
-        "symfony/maker-bundle": "^1.67"
+        "symfony/maker-bundle": "^1.67",
+        "symfony/stopwatch": "8.0.*",
+        "symfony/web-profiler-bundle": "8.0.*"
     }
 }

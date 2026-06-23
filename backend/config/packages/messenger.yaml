@@ -1,16 +1,16 @@
 framework:
     messenger:
+        failure_transport: failed
         transports:
-            async: 'doctrine://default' # Le transport utilise la BDD
+            async:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                retry_strategy:
+                    max_retries: 3
+                    delay: 1000
+                # La magie opère ici :
+                failure_transport: failed
 
+            failed: 'doctrine://default?queue_name=failed'
         routing:
             # 💡 On dit à Symfony : "Tous les GenerateArticleMessage vont dans l'async"
             App\Message\GenerateArticleMessage: async
-
-# when@test:
-#    framework:
-#        messenger:
-#            transports:
-#                # replace with your transport name here (e.g., my_transport: 'in-memory://')
-#                # For more Messenger testing tools, see https://github.com/zenstruck/messenger-test
-#                async: 'in-memory://'

@@ -1,0 +1,25 @@
+# config/packages/dev/monolog.yaml
+monolog:
+    # 1. On déclare ton canal personnalisé
+    channels: ['ai_generator']
+
+    handlers:
+        # Le handler principal de Symfony (NE PAS SUPPRIMER)
+        main:
+            type: stream
+            path: "%kernel.logs_dir%/%kernel.environment%.log"
+            level: debug
+            channels: ["!event"]
+        
+        # Le handler qui affiche les logs dans ton terminal (NE PAS SUPPRIMER)
+        console:
+            type: console
+            process_psr_3_messages: false
+            channels: ["!event", "!doctrine", "!console"]
+
+        # 🚀 Ton handler IA, correctement configuré à la suite
+        ai_generator_handler:
+            type: stream
+            path: "%kernel.logs_dir%/ai_generator.log"
+            level: debug
+            channels: ["ai_generator"]

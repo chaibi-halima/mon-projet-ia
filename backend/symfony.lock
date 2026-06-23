@@ -175,6 +175,18 @@
             "config/packages/messenger.yaml"
         ]
     },
+    "symfony/monolog-bundle": {
+        "version": "4.0",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "3.7",
+            "ref": "1b9efb10c54cb51c713a9391c9300ff8bceda459"
+        },
+        "files": [
+            "config/packages/monolog.yaml"
+        ]
+    },
     "symfony/property-info": {
         "version": "8.0",
         "recipe": {
@@ -245,6 +257,19 @@
         },
         "files": [
             "config/packages/validator.yaml"
+        ]
+    },
+    "symfony/web-profiler-bundle": {
+        "version": "8.0",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "7.3",
+            "ref": "a363460c1b0b4a4d0242f2ce1a843ca0f6ac9026"
+        },
+        "files": [
+            "config/packages/web_profiler.yaml",
+            "config/routes/web_profiler.yaml"
         ]
     }
 }
