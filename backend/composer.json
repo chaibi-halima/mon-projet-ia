@@ -88,6 +88,7 @@
             "@test:lint",
             "@test:php-cs-fixer",
             "@test:phpstan",
+            "@test:db-init",
             "@test:phpunit"
         ],
         "test:lint": "php bin/console lint:container && php bin/console lint:yaml config",
@@ -96,7 +97,8 @@
         "test:phpmd": "vendor/bin/phpmd src text phpmd.xml",
         "test:phpstan": "vendor/bin/phpstan analyse --memory-limit=1G",
         "test:security-checker": "composer audit",
-        "test:phpunit": "vendor/bin/phpunit"
+        "test:phpunit": "vendor/bin/phpunit",
+        "test:db-init": "php bin/console doctrine:database:create --if-not-exists && php bin/console doctrine:schema:drop --force && php bin/console doctrine:schema:create"
     },
     "conflict": {
         "symfony/symfony": "*"
