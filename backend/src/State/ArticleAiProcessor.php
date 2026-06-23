@@ -9,13 +9,15 @@ use App\Entity\Article;
 use App\Message\GenerateArticleMessage;
 use Symfony\Component\Messenger\MessageBusInterface;
 
+/**
+ * @implements ProcessorInterface<Article, Article>
+ */
 class ArticleAiProcessor implements ProcessorInterface
 {
     public function __construct(
         private PersistProcessor $persistProcessor,
         private MessageBusInterface $messageBus, // 💡 On injecte le bus de messages
-    ) {
-    }
+    ) {}
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): mixed
     {
