@@ -7,6 +7,7 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Entity\Article;
 use App\Message\GenerateArticleMessage;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
@@ -15,10 +16,10 @@ use Symfony\Component\Messenger\MessageBusInterface;
 class ArticleAiProcessor implements ProcessorInterface
 {
     public function __construct(
-        private PersistProcessor $persistProcessor,
+        #[Target(PersistProcessor::class)]
+        private ProcessorInterface $persistProcessor,
         private MessageBusInterface $messageBus, // 💡 On injecte le bus de messages
-    ) {
-    }
+    ) {}
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): mixed
     {
