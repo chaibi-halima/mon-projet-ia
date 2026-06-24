@@ -79,6 +79,30 @@ services:
     # 💡 MODIFICATION ICI : On remplace "llama3" par "llama3.2" (ou "phi3")
     entrypoint: [ "curl", "-X", "POST", "http://ollama:11434/api/pull", "-d", '{"name": "llama3.2"}' ]
 
+  messenger-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile # Utilise le même Dockerfile que ton app PHP
+    container_name: mon-projet-ia-worker
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    # 🚀 La commande magique qui écoute les messages en continu
+    # Le "-vv" permet d'avoir des logs très bavards dans Docker pour voir l'IA travailler
+    command: php bin/console messenger:consume async -vv
+    volumes:
+      - ./backend:/app
+    depends_on:
+      database:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    environment:
+      # Copie ici les mêmes variables d'environnement que ton service webgateway
+      # (DATABASE_URL, MESSENGER_TRANSPORT_DSN, OLLAMA_HOST, etc.)
+      DATABASE_URL: "mysql://root:root@database:3306/app_db?serverVersion=8.0.32&charset=utf8mb4"
+      MESSENGER_TRANSPORT_DSN: doctrine://default
+
 volumes:
   caddy_data:
   caddy_config:
