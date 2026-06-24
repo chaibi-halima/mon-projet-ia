@@ -30,7 +30,6 @@ class ArticleAiProcessor implements ProcessorInterface
         $data->setContent('⏳ En cours de rédaction par l\'IA...');
 
         // 2. On sauvegarde en BDD (ce qui va lui générer un ID)
-        // @phpstan-ignore argument.unresolvableType
         $savedArticle = $this->persistProcessor->process($data, $operation, $uriVariables, $context);
 
         // 3. On envoie le ticket dans le bus de messages avec l'ID tout frais

@@ -6,10 +6,15 @@ parameters:
     paths:
         - src
         
-    # 🚀 La ligne magique pour harmoniser PHPStan et API Platform
     treatPhpDocTypesAsCertain: false
         
     ignoreErrors:
+        # 🚀 On ignore la fausse alerte du bootstrap de Symfony
         -
             message: '#Call to function method_exists\(\) with .* will always evaluate to true\.#'
             path: tests/bootstrap.php
+
+        # 🚀 On ignore le type non résoluble propre au PersistProcessor d'API Platform
+        -
+            message: '#Parameter \#1 \$data of method ApiPlatform\\Doctrine\\Common\\State\\PersistProcessor::process\(\) contains unresolvable type\.#'
+            path: src/State/ArticleAiProcessor.php
