@@ -33,19 +33,20 @@ services:
 
   # --- DATABASE (MYSQL) ---
   database:
-    image: mysql:8.0
+    image: mysql:8.0 # ou mariadb
+    container_name: mon-projet-ia-database
+    # ... tes configurations actuelles (ports, volumes, environment) ...
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: app_db
+    
+    # 🚀 ON AJOUTE/CORRIGE CE BLOC :
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -proot"]
-      timeout: 5s
-      retries: 5
-      interval: 5s
-    ports:
-      - "3306:3306"
-    volumes:
-      - db_data:/var/lib/mysql
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s  # Vérifier toutes les 5 secondes
+      timeout: 5s   # Attendre maximum 5 secondes par essai
+      retries: 10   # Essayer jusqu'à 10 fois (donne 50 secondes max à MySQL pour démarrer)
+      start_period: 10s # Laisse 10 secondes de répit initial à MySQL avant de tester
 
   # --- FRONTEND (REACT JS) ---
   frontend:

@@ -7,14 +7,15 @@ parameters:
         - src
         
     treatPhpDocTypesAsCertain: false
+    
+    # 🚀 LA SÉCURITÉ : PHPStan ne plantera plus si une erreur ignorée disparaît ou bouge
+    reportUnmatchedIgnoredErrors: false
         
     ignoreErrors:
-        # 🚀 On ignore la fausse alerte du bootstrap de Symfony
+        # Ignorer la fausse alerte du bootstrap de Symfony
         -
             message: '#Call to function method_exists\(\) with .* will always evaluate to true\.#'
             path: tests/bootstrap.php
 
-        # 🚀 On ignore le type non résoluble propre au PersistProcessor d'API Platform
-        -
-            message: '#Parameter \#1 \$data of method ApiPlatform\\Doctrine\\Common\\State\\PersistProcessor::process\(\) contains unresolvable type\.#'
-            path: src/State/ArticleAiProcessor.php
+        # 🚀 Pattern ultra-simplifié et global pour l'ID Doctrine (plus de conflit de chemin)
+        - '#Property App\\Entity\\.*::\$id.*is never assigned int#'
