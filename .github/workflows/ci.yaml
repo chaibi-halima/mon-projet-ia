@@ -20,11 +20,14 @@ jobs:
       - name: Wait for services
         run: sleep 10
 
-      # 🚀 Correction ici : on passe de "exec" à "run --rm"
+      # 🚀 ÉTAPE AJOUTÉE : On installe proprement les dépendances dans la CI
+      - name: Install Composer Dependencies
+        run: docker compose run --rm webgateway composer install --prefer-dist --no-progress --no-interaction
+
+      # 🎯 Ensuite, tes tests s'exécuteront sans aucun problème de droits
       - name: Run Quality and Security Tests
         run: docker compose run --rm webgateway composer test
 
-      # 🔍 En cas d'échec, cette étape affiche les logs Docker pour débugger instantanément
       - name: Print container logs on failure
         if: failure()
         run: docker compose logs
