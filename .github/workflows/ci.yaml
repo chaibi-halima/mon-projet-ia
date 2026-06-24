@@ -20,13 +20,13 @@ jobs:
       - name: Wait for services
         run: sleep 10
 
-      # 🚀 ÉTAPE AJOUTÉE : On installe proprement les dépendances dans la CI
+      # 🚀 On ajoute "--user root" pour écraser la restriction dans la CI
       - name: Install Composer Dependencies
-        run: docker compose run --rm webgateway composer install --prefer-dist --no-progress --no-interaction
+        run: docker compose run --user root --rm webgateway composer install --prefer-dist --no-progress --no-interaction
 
-      # 🎯 Ensuite, tes tests s'exécuteront sans aucun problème de droits
+      # 🎯 Même chose ici pour que les linter et tests s'exécutent sans blocage
       - name: Run Quality and Security Tests
-        run: docker compose run --rm webgateway composer test
+        run: docker compose run --user root --rm webgateway composer test
 
       - name: Print container logs on failure
         if: failure()
