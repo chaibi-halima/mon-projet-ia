@@ -4,6 +4,7 @@ services:
     build:
       context: ./backend
       target: frankenphp_dev
+    user: "1000:1000"
     volumes:
       # MODIFICATION ICI : On mappe le dossier ./backend sur /app si le container le demande
       - ./backend:/app
