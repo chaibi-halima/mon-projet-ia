@@ -32,6 +32,15 @@ class GenerateArticleMessageHandler
     ) {
     }
 
+    private function getLengthInstruction(?string $length): string
+    {
+        return match ($length) {
+            'court' => 'environ 200 mots',
+            'long' => '1000 mots ou plus',
+            default => 'environ 500 mots', // 'moyen' ou valeur inconnue
+        };
+    }
+
     public function __invoke(GenerateArticleMessage $message): void
     {
         $article = $this->entityManager->getRepository(Article::class)->find($message->getArticleId());
@@ -54,7 +63,10 @@ class GenerateArticleMessageHandler
             // 2. Ajouter les messages un par un
             // Note : SystemMessage attend un string, UserMessage attend un Text
             $messages->add(new SystemMessage("Tu es un rédacteur web expert. Ton: {$message->getTone()}."));
-            $messages->add(new UserMessage(new Text("Rédige un article sur : {$message->getTopic()}")));
+            $lengthInstruction = $this->getLengthInstruction($message->getLength());
+            $messages->add(new UserMessage(new Text(
+                "Rédige un article de {$lengthInstruction} sur : {$message->getTopic()}"
+            )));
 
             // Appel à la plateforme
             $result = $this->platform->invoke('llama3.2', $messages);

@@ -23,3 +23,6 @@ framework:
                 mark_failed:
                     from: [pending, processing]
                     to:   failed
+                return_processing:
+                    from: failed
+                    to:   processing

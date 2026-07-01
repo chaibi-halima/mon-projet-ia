@@ -36,7 +36,8 @@ services:
   database:
     image: mysql:8.0 # ou mariadb
     container_name: mon-projet-ia-database
-    # ... tes configurations actuelles (ports, volumes, environment) ...
+    ports:
+      - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: app_db

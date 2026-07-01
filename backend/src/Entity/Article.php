@@ -17,6 +17,7 @@ use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\Put;
 use App\Repository\ArticleRepository;
 use App\State\ArticleAiProcessor;
+use App\State\ArticleRetryProcessor;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
 
@@ -34,6 +35,12 @@ use Symfony\Component\Serializer\Attribute\Groups;
             name: 'post_ai',
             processor: ArticleAiProcessor::class,
             priority: 10, // 👈 Crucial pour doubler la route /{id}
+        ),
+        new Post(
+            uriTemplate: '/articles/{id}/retry',
+            name: 'post_retry',
+            processor: ArticleRetryProcessor::class,
+            deserialize: false, // 👈 pas de body attendu, juste l'ID dans l'URL
         ),
     ],
     graphQlOperations: [
@@ -73,11 +80,13 @@ class Article
     #[Groups(['article:read'])]
     private ?\DateTimeImmutable $createdAt = null;
 
-    #[Groups(['article:write'])]
-    private ?string $tone = null;
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['article:read', 'article:write'])]
+    private ?string $tone = 'professionnel';
 
-    #[Groups(['article:write'])]
-    private ?string $length = null;
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['article:read', 'article:write'])]
+    private ?string $length = 'moyen';
 
     #[ORM\Column(length: 1024, nullable: true)]
     #[Groups(['article:read', 'article:write'])]

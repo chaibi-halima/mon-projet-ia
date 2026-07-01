@@ -1,13 +1,13 @@
 import { useState, useContext, useEffect } from 'react';
-import { useQuery, useMutation } from '@apollo/client/react';
+import { useQuery, useMutation, useApolloClient } from '@apollo/client/react';
 import { 
   Card, Row, Col, Input, Select, Space, Spin, Empty, 
-  Tag, Typography, Button, Modal, Popconfirm, Form, message, Pagination, Statistic 
+  Tag, Typography, Button, Modal, Popconfirm, Form, message, Pagination, Statistic, Tooltip
 } from 'antd';
 import { 
   CalendarOutlined, SearchOutlined, SortAscendingOutlined, 
   TagsOutlined, BookOutlined, EditOutlined, DeleteOutlined,
-  FileTextOutlined
+  FileTextOutlined, RedoOutlined
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import { GET_ARTICLES, GET_CATEGORIES, UPDATE_ARTICLE, DELETE_ARTICLE } from './graphql/articleQueries';
@@ -34,6 +34,8 @@ function App() {
   const [messageApi, contextHolder] = message.useMessage();
   const { logout } = useContext(AuthContext);
   const token = localStorage.getItem('jwt_token');
+
+  const client = useApolloClient();
 
   // --------------------------------------------------------
   // 📡 REQUÊTES GRAPHQL (APOLLO CLIENT)
@@ -116,6 +118,28 @@ function App() {
   useEffect(() => {
     return () => stopPolling();
   }, [stopPolling]);
+
+  const handleRetry = async (id) => {
+    const token = localStorage.getItem('jwt_token');
+    try {
+      const response = await fetch(`https://localhost${id}/retry`, { // 👈 id contient déjà /api/articles/2
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        messageApi.success('Régénération relancée !');
+        client.cache.evict({ fieldName: 'articles' });
+        client.cache.gc();
+        refetchArticles(); // relance immédiatement le fetch pour voir passer le statut à 'processing'
+      } else {
+        const errData = await response.json();
+        messageApi.error(`Erreur : ${errData['hydra:description'] || 'Impossible de relancer'}`);
+      }
+    } catch (error) {
+      messageApi.error("Erreur réseau lors de la relance.");
+    }
+  };
 
   // ⚡ GESTION DES ACTIONS (VERSION 100% GRAPHQL)
   
@@ -295,15 +319,28 @@ function App() {
                         {article.content ? article.content.replace(/[#*`\-_]/g, '').substring(0, 120) + '...' : ''}
                       </Paragraph>
                     </div>
-                    
                     <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f0f0f0', paddingTop: '12px' }}>
-                      <Space size="middle">
-                        <Button type="text" icon={<EditOutlined style={{ color: '#1890ff' }} />} onClick={() => openEditModal(article)}>Modifier</Button>
+                      <Space size="small">
+                        <Tooltip title="Modifier">
+                          <Button type="text" icon={<EditOutlined style={{ color: '#1890ff' }} />} onClick={() => openEditModal(article)} />
+                        </Tooltip>
+
+                        {article.status === 'failed' && (
+                          <Tooltip title="Régénérer">
+                            <Button type="text" icon={<RedoOutlined style={{ color: '#fa8c16' }} />} onClick={() => handleRetry(article.id)} />
+                          </Tooltip>
+                        )}
+
                         <Popconfirm title="Supprimer ?" onConfirm={() => handleDelete(article.id)} okText="Oui" cancelText="Non" okButtonProps={{ danger: true }}>
-                          <Button type="text" danger icon={<DeleteOutlined />}>Supprimer</Button>
+                          <Tooltip title="Supprimer">
+                            <Button type="text" danger icon={<DeleteOutlined />} />
+                          </Tooltip>
                         </Popconfirm>
                       </Space>
-                      <Button type="primary" size="small" icon={<BookOutlined />} onClick={() => { setSelectedArticle(article); setIsModalVisible(true); }}>Lire</Button>
+
+                      <Button type="primary" size="small" icon={<BookOutlined />} onClick={() => { setSelectedArticle(article); setIsModalVisible(true); }}>
+                        Lire
+                      </Button>
                     </div>
                   </Card>
                 </Col>
