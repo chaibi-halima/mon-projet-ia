@@ -84,6 +84,7 @@ class Article
     private ?string $imageUrl = null;
 
     #[ORM\Column(length: 255, options: ['default' => 'pending'])]
+    #[Groups(['article:read', 'article:write'])]
     private string $status = 'pending'; // État initial obligatoire
 
     public function getId(): ?int

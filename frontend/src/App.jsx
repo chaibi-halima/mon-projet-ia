@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { 
   Card, Row, Col, Input, Select, Space, Spin, Empty, 
@@ -19,6 +19,7 @@ const { Title, Paragraph } = Typography;
 function App() {
   // États des filtres et pagination
   const [searchText, setSearchText] = useState('');
+  const [searchInputValue, setSearchInputValue] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,6 +39,18 @@ function App() {
   // 📡 REQUÊTES GRAPHQL (APOLLO CLIENT)
   // --------------------------------------------------------
   
+  useEffect(() => {
+    // On lance un chrono de 300ms
+    const timer = setTimeout(() => {
+      setSearchText(searchInputValue);
+      setCurrentPage(1); // On reset la page à 1 quand la recherche change vraiment
+    }, 300);
+
+    // Si l'utilisateur tape une nouvelle lettre avant les 300ms, 
+    // on détruit le chrono précédent et on en relance un neuf.
+    return () => clearTimeout(timer);
+  }, [searchInputValue]);
+
   // 📡 MUTATIONS GRAPHQL
   const [mutateDelete] = useMutation(DELETE_ARTICLE, {
     onCompleted: () => {
@@ -57,15 +70,14 @@ function App() {
   });
 
   // 1. Chargement des articles (avec filtres, tri et polling de 5s)
-  const { loading, data, refetch: refetchArticles } = useQuery(GET_ARTICLES, {
+  const { loading, data, refetch: refetchArticles, startPolling, stopPolling } = useQuery(GET_ARTICLES, {
     variables: { 
       page: currentPage,
       title: searchText || null,
       categoryName: selectedCategory === 'all' ? null : selectedCategory,
       order: sortBy === 'newest' ? [{ createdAt: 'desc' }] : [{ createdAt: 'asc' }]
     },
-    pollInterval: token ? 5000 : 0, // 🔄 Remplace ton ancien setInterval de 5s !
-    skip: !token, // 🛑 Bloque la requête et vide l'écran si pas de token
+    skip: !token, // 🚀 Plus de ligne "pollInterval" ici !
     onError: (err) => {
       if (err.message.includes('401') || err.networkError?.statusCode === 401) {
         localStorage.removeItem('jwt_token');
@@ -73,7 +85,7 @@ function App() {
         messageApi.error("Votre session a expiré. Veuillez vous reconnecter.");
       }
     }
-  });
+  }); 
 
   // 2. Chargement des catégories pour le filtre et les statistiques
   const { data: categoriesData } = useQuery(GET_CATEGORIES, {
@@ -81,10 +93,29 @@ function App() {
   });
 
   // Extraction des données GraphQL pour ton rendu
-  const articles = data?.articles?.collection || [];
+  const articles = data?.articles?.collection || data?.articles || [];
   const totalItems = data?.articles?.paginationInfo?.totalCount || 0;
   
   const categories = categoriesData?.categories?.collection || [];
+
+  // 🔄 Gestionnaire de Polling Intelligent avec Verrou anti-réinitialisation
+  const hasProcessingArticles = articles.some(
+    article => article.status === 'processing' || article.status === 'pending'
+  );
+
+  // 2) Effet dédié uniquement au start/stop, basé sur un booléen stable
+  useEffect(() => {
+    if (token && hasProcessingArticles) {
+      startPolling(5000);
+    } else {
+      stopPolling();
+    }
+  }, [hasProcessingArticles, token, startPolling, stopPolling]);
+
+  // 3) Cleanup séparé, exécuté UNIQUEMENT au démontage réel du composant
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
 
   // ⚡ GESTION DES ACTIONS (VERSION 100% GRAPHQL)
   
@@ -172,10 +203,9 @@ function App() {
             <Input
               placeholder="Rechercher par titre..."
               prefix={<SearchOutlined />} 
-              value={searchText}
+              value={searchInputValue}
               onChange={(e) => {
-                setSearchText(e.target.value);
-                setCurrentPage(1);
+                setSearchInputValue(e.target.value);
               }}
               allowClear
               size="large"

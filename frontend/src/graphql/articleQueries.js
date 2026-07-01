@@ -7,6 +7,7 @@ export const GET_ARTICLES = gql`
         id
         title
         content
+        status
         imageUrl
         createdAt
         category {

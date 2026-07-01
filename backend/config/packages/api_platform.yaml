@@ -28,3 +28,5 @@ api_platform:
                         description: "Collez uniquement votre jeton JWT brut (le mot 'Bearer' sera ajouté automatiquement)."
             security:
                 - bearerAuth: []
+    mercure:
+        enabled: false

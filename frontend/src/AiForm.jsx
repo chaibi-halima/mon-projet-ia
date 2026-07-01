@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@apollo/client/react';
+import { useQuery, useApolloClient } from '@apollo/client/react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, message, Select, Row, Col } from 'antd';
 import { GET_CATEGORIES } from './graphql/articleQueries';
@@ -12,6 +12,7 @@ function AiForm() {
   const navigate = useNavigate();
   const [messageApi, contextHolder] = message.useMessage();
   const [generating, setGenerating] = useState(false);
+  const client = useApolloClient();
 
   // Charger les catégories existantes via GraphQL pour le formulaire
   const { data: categoriesData } = useQuery(GET_CATEGORIES);
@@ -46,7 +47,8 @@ function AiForm() {
       if (response.ok) {
         messageApi.success("Ordre de génération envoyé à l'IA avec succès !");
         form.resetFields();
-        
+        client.cache.evict({ fieldName: 'articles' });
+        client.cache.gc();
         // 🚀 Redirection immédiate vers la page d'accueil.
         // Comme ton App.jsx a un pollInterval de 5s, l'article apparaîtra vide,
         // puis se remplira automatiquement dès que Ollama aura fini son travail !
