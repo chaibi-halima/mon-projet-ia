@@ -5,10 +5,12 @@ export const GET_ARTICLES = gql`
     articles(page: $page, title: $title, category_name: $categoryName, order: $order) {
       collection {
         id
+        dbId
         title
         content
         imageUrl
         createdAt
+        status
         category {
           id
           name

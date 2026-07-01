@@ -6,15 +6,14 @@ use App\Entity\Article;
 use App\Message\GenerateArticleMessage;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
-use Symfony\AI\Platform\Message\Content\Text;
-use Symfony\AI\Platform\Message\MessageBag;
-use Symfony\AI\Platform\Message\SystemMessage;
-use Symfony\AI\Platform\Message\UserMessage;
-use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Component\Mercure\HubInterface;
+use Symfony\Component\Mercure\Update;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Workflow\WorkflowInterface;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 #[AsMessageHandler]
 class GenerateArticleMessageHandler
@@ -25,12 +24,14 @@ class GenerateArticleMessageHandler
         #[Autowire(service: 'monolog.logger.ai_generator')]
         private readonly LoggerInterface $logger,
 
-        private readonly PlatformInterface $platform,
+        #[Autowire(service: 'http_client')]
+        private readonly HttpClientInterface $httpClient, // 🚀 Injecté pour gérer le stream direct
 
         #[Target('article_generation')]
         private readonly WorkflowInterface $articleGenerationWorkflow,
-    ) {
-    }
+
+        private readonly HubInterface $hub, // 🚀 Injecté pour notifier React
+    ) {}
 
     public function __invoke(GenerateArticleMessage $message): void
     {
@@ -41,7 +42,7 @@ class GenerateArticleMessageHandler
             return;
         }
 
-        // 1. Passage à l'état "processing" (L'IA commence le travail)
+        // 1. Passage à l'état "processing"
         if ($this->articleGenerationWorkflow->can($article, 'start_processing')) {
             $this->articleGenerationWorkflow->apply($article, 'start_processing');
             $this->entityManager->flush();
@@ -49,29 +50,85 @@ class GenerateArticleMessageHandler
         }
 
         try {
-            $messages = new MessageBag();
+            $this->logger->info("=== 🚀 DÉBUT DE LA GÉNÉRATION POUR L'ARTICLE {$article->getId()} ===");
+            $fullContent = '';
 
-            // 2. Ajouter les messages un par un
-            // Note : SystemMessage attend un string, UserMessage attend un Text
-            $messages->add(new SystemMessage("Tu es un rédacteur web expert. Ton: {$message->getTone()}."));
-            $messages->add(new UserMessage(new Text("Rédige un article sur : {$message->getTopic()}")));
+            $response = $this->httpClient->request('POST', 'http://ollama:11434/api/chat', [
+                'json' => [
+                    'model' => 'llama3.2',
+                    'messages' => [
+                        ['role' => 'system', 'content' => "Tu es un rédacteur web expert. Ton: {$message->getTone()}."],
+                        ['role' => 'user', 'content' => "Rédige un article sur : {$message->getTopic()}"],
+                    ],
+                    'stream' => true,
+                ],
+            ]);
 
-            // Appel à la plateforme
-            $result = $this->platform->invoke('llama3.2', $messages);
-            $this->logger->debug('Appel IA réussi, traitement du résultat...');
+            $buffer = '';
+            $updateCounter = 0;
 
-            $content = $result->getResult()->getContent();
+            // 🔄 Lecture du flux réseau d'Ollama
+            foreach ($this->httpClient->stream($response) as $chunk => $chunkResult) {
+                if ($chunkResult->isLast()) {
+                    break;
+                }
 
-            // Si c'est un objet, le cast (string) appelle sa méthode __toString()
-            $article->setContent((string) $content);
+                // On accumule les morceaux de texte dans un buffer de lignes
+                $buffer .= $chunkResult->getContent();
 
+                // Ollama sépare ses JSON par des retours à la ligne (\n)
+                while (($pos = strpos($buffer, "\n")) !== false) {
+                    $line = substr($buffer, 0, $pos);
+                    $buffer = substr($buffer, $pos + 1);
+
+                    if (empty(trim($line))) {
+                        continue;
+                    }
+
+                    $data = json_decode($line, true);
+                    if (isset($data['message']['content'])) {
+                        $text = $data['message']['content'];
+                        $fullContent .= $text;
+                        $updateCounter++;
+
+                        // ⚡ THROTTLING : On notifie React uniquement tous les 15 morceaux de texte 
+                        // pour éviter de saturer les logs et le réseau
+                        if ($updateCounter % 15 === 0) {
+                            $this->hub->publish(new Update(
+                                sprintf('http://mon-projet.com/article/%d', $article->getId()),
+                                json_encode([
+                                    'content' => $fullContent,
+                                    'status' => 'processing'
+                                ])
+                            ));
+                        }
+                    }
+                }
+            }
+
+            $this->logger->info("=== 📝 FIN DU FLUX IA. ENREGISTREMENT EN BDD... ===");
+
+            // Sauvegarde finale du texte complet
+            $article->setContent($fullContent);
+
+            // 4. Passage à l'état "success"
             if ($this->articleGenerationWorkflow->can($article, 'mark_success')) {
                 $this->articleGenerationWorkflow->apply($article, 'mark_success');
-                $this->entityManager->flush();
-                $this->logger->info("Article {id} : génération réussie ('success')", ['id' => $article->getId()]);
+                $this->entityManager->flush(); // ⚠️ Si ça plante ici, regarde le type de ta colonne en BDD !
+                $this->logger->info("Article {id} : sauvegardé avec succès en BDD.", ['id' => $article->getId()]);
             }
+
+            // 5. Notification finale de succès pour React
+            $this->hub->publish(new Update(
+                sprintf('http://mon-projet.com/article/%d', $article->getId()),
+                json_encode([
+                    'content' => $fullContent,
+                    'status' => 'success'
+                ])
+            ));
+
+            $this->logger->info("=== 🏁 APPLIQUÉ AVEC SUCCÈS POUR L'ARTICLE {$article->getId()} ===");
         } catch (\Exception $e) {
-            // Log critique avec le contexte complet
             if ($this->articleGenerationWorkflow->can($article, 'mark_failed')) {
                 $this->articleGenerationWorkflow->apply($article, 'mark_failed');
                 $this->entityManager->flush();
@@ -82,7 +139,15 @@ class GenerateArticleMessageHandler
                 'msg' => $e->getMessage(),
             ]);
 
-            // Crucial : on relance l'exception pour que Symfony Messenger place le message dans la queue 'failed'
+            // Notification de l'échec à React via Mercure
+            $this->hub->publish(new Update(
+                sprintf('http://mon-projet.com/article/%d', $article->getId()),
+                json_encode([
+                    'content' => '❌ Une erreur est survenue lors de la génération par l\'IA.',
+                    'status' => 'failed'
+                ])
+            ));
+
             throw $e;
         }
     }

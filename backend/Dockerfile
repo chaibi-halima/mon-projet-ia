@@ -105,9 +105,11 @@ RUN <<-EOF
 	mkdir -p var/cache var/log var/share
 	composer dump-autoload --classmap-authoritative --no-dev
 	composer dump-env prod
-	composer run-script --no-dev post-install-cmd
+	
+	DATABASE_URL="sqlite:///:memory:" composer run-script --no-dev post-install-cmd
+	
 	if [ -f importmap.php ]; then
-		php bin/console asset-map:compile
+		DATABASE_URL="sqlite:///:memory:" php bin/console asset-map:compile
 	fi
 	chmod +x bin/console
 	chmod -R g=u var

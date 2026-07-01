@@ -15,6 +15,7 @@ use ApiPlatform\Metadata\GraphQl\Query;
 use ApiPlatform\Metadata\GraphQl\QueryCollection;
 use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\Put;
+use ApiPlatform\Metadata\ApiProperty;
 use App\Repository\ArticleRepository;
 use App\State\ArticleAiProcessor;
 use Doctrine\ORM\Mapping as ORM;
@@ -84,7 +85,8 @@ class Article
     private ?string $imageUrl = null;
 
     #[ORM\Column(length: 255, options: ['default' => 'pending'])]
-    private string $status = 'pending'; // État initial obligatoire
+    #[Groups(['article:read'])]
+    private string $status = 'pending';
 
     public function getId(): ?int
     {
@@ -201,5 +203,12 @@ class Article
         if (null === $this->createdAt) {
             $this->createdAt = new \DateTimeImmutable();
         }
+    }
+
+    #[ApiProperty]
+    #[Groups(['article:read'])] // adapte selon tes groupes de sérialisation existants
+    public function getDbId(): ?int
+    {
+        return $this->id;
     }
 }

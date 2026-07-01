@@ -4,7 +4,7 @@ services:
     build:
       context: ./backend
       target: frankenphp_dev
-    user: "1000:1000"
+    user: "root"
     volumes:
       # MODIFICATION ICI : On mappe le dossier ./backend sur /app si le container le demande
       - ./backend:/app
@@ -25,6 +25,9 @@ services:
       MAX_EXECUTION_TIME: 300
       # On indique explicitement à Symfony où se trouve la racine dans le container
       DOCUMENT_ROOT: /app/public
+      MERCURE_URL: http://mercure/.well-known/mercure
+      MERCURE_PUBLIC_URL: http://localhost:3000/.well-known/mercure
+      MERCURE_JWT_TOKEN: "MonSecretSuperSecritPourLaProd123!"
     depends_on:
       database:
         condition: service_healthy # 💡 AJOUTE CECI : Attend que MySQL soit vraiment prêt
@@ -35,7 +38,8 @@ services:
   database:
     image: mysql:8.0 # ou mariadb
     container_name: mon-projet-ia-database
-    # ... tes configurations actuelles (ports, volumes, environment) ...
+    ports:
+      - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: app_db
@@ -86,6 +90,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile # Utilise le même Dockerfile que ton app PHP
     container_name: mon-projet-ia-worker
+    user: "root"
     restart: unless-stopped
     healthcheck:
       disable: true
@@ -104,9 +109,37 @@ services:
       # (DATABASE_URL, MESSENGER_TRANSPORT_DSN, OLLAMA_HOST, etc.)
       DATABASE_URL: "mysql://root:root@database:3306/app_db?serverVersion=8.0.32&charset=utf8mb4"
       MESSENGER_TRANSPORT_DSN: doctrine://default
+      MERCURE_URL: http://mercure/.well-known/mercure
+      # MERCURE_PUBLIC_URL: http://localhost:3000/.well-known/mercure
+      MERCURE_JWT_SECRET: "ClefUniqueEtHardcodeePourQueToutMarcheEnDev123!"
+      # MERCURE_JWT_TOKEN: "MonSecretSuperSecritPourLaProd123!"
+
+  mercure:
+    image: dunglas/mercure
+    user: "root"
+    restart: unless-stopped
+    environment:
+      SERVER_NAME: :80
+      # pour autoriser React à écouter sans avoir besoin de token JWT.
+      # MERCURE_SUBSCRIBER_JWT_KEY: "MonSecretSuperSecritPourLaProd123!"
+      # MERCURE_URL: http://mercure/.well-known/mercure
+      # MERCURE_EXTRA_DIRECTIVES: |
+        # cors_origins http://localhost:3000
+      CORS_ALLOWED_ORIGINS: "*"
+      MERCURE_JWT_SECRET: "ClefUniqueEtHardcodeePourQueToutMarcheEnDev123!"
+      # MERCURE_PUBLISHER_JWT_KEY: "MonSecretSuperSecritPourLaProd123!"
+      # MERCURE_SUBSCRIBER_JWT_KEY: "cle-spectateur-anonyme-de-dev"
+      DEMO: 0
+    ports:
+      - "3005:80"
+    volumes:
+      - m_data:/data
+      - m_config:/config
 
 volumes:
   caddy_data:
   caddy_config:
   db_data:
   ollama_data:
+  m_data:
+  m_config:

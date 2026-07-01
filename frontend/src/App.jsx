@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react';
+import { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { 
   Card, Row, Col, Input, Select, Space, Spin, Empty, 
@@ -11,7 +11,7 @@ import {
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import { GET_ARTICLES, GET_CATEGORIES, UPDATE_ARTICLE, DELETE_ARTICLE } from './graphql/articleQueries';
-import { AuthContext } from './AuthContext.js'; // 💡 Pour gérer l'expiration proprement
+import { AuthContext } from './AuthContext.js';
 
 const DEFAULT_IMAGE = 'https://placehold.co/800x400/f0f2f5/8c8c8c?text=Image+non+fournie';
 const { Title, Paragraph } = Typography;
@@ -29,20 +29,21 @@ function App() {
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [editingArticle, setEditingArticle] = useState(null);
   
+  // 🚀 TEMP ZONE : State de transition pour forcer le rafraîchissement visuel mot par mot
+  const [liveUpdates, setLiveUpdates] = useState({});
+
   const [editForm] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
   const { logout } = useContext(AuthContext);
   const token = localStorage.getItem('jwt_token');
 
   // --------------------------------------------------------
-  // 📡 REQUÊTES GRAPHQL (APOLLO CLIENT)
+  // 📡 MUTATIONS GRAPHQL (APOLLO CLIENT)
   // --------------------------------------------------------
-  
-  // 📡 MUTATIONS GRAPHQL
   const [mutateDelete] = useMutation(DELETE_ARTICLE, {
     onCompleted: () => {
       messageApi.success('Article supprimé !');
-      refetchArticles(); // Force la grille à se recharger proprement
+      refetchArticles(); 
     },
     onError: (err) => messageApi.error(`Erreur de suppression : ${err.message}`)
   });
@@ -50,22 +51,21 @@ function App() {
   const [mutateUpdate] = useMutation(UPDATE_ARTICLE, {
     onCompleted: () => {
       messageApi.success('Article modifié !');
-      refetchArticles(); // Synchronise la modification à l'écran
+      refetchArticles(); 
       setIsEditModalVisible(false);
     },
     onError: (err) => messageApi.error(`Erreur de modification : ${err.message}`)
   });
 
-  // 1. Chargement des articles (avec filtres, tri et polling de 5s)
-  const { loading, data, refetch: refetchArticles } = useQuery(GET_ARTICLES, {
+  // 📡 REQUÊTE PRINCIPALE DES ARTICLES
+  const { loading, data, refetch: refetchArticles, client } = useQuery(GET_ARTICLES, {
     variables: { 
       page: currentPage,
       title: searchText || null,
       categoryName: selectedCategory === 'all' ? null : selectedCategory,
       order: sortBy === 'newest' ? [{ createdAt: 'desc' }] : [{ createdAt: 'asc' }]
     },
-    pollInterval: token ? 5000 : 0, // 🔄 Remplace ton ancien setInterval de 5s !
-    skip: !token, // 🛑 Bloque la requête et vide l'écran si pas de token
+    skip: !token,
     onError: (err) => {
       if (err.message.includes('401') || err.networkError?.statusCode === 401) {
         localStorage.removeItem('jwt_token');
@@ -75,49 +75,115 @@ function App() {
     }
   });
 
-  // 2. Chargement des catégories pour le filtre et les statistiques
+  const articlesList = data?.articles?.collection || data?.articles || [];
+
+  // Référence stable pour isoler la liste du useEffect
+  const articlesRef = useRef(articlesList);
+  useEffect(() => {
+    articlesRef.current = articlesList;
+  }, [articlesList]);
+
+  // 🚀 FILET DE SÉCURITÉ : On écoute TOUS les articles visibles sur la page en cours
+  const pageIdsString = useMemo(() => {
+    return articlesList.map(article => article.id).join(',');
+  }, [articlesList]);
+
+  // ⚡ ÉCOUTEUR MERCURE PERMANENT ET ROBUSTE
+  // ⚡ ÉCOUTEUR MERCURE PERMANENT ET ROBUSTE
+  useEffect(() => {
+    if (!pageIdsString) return;
+
+    const ids = pageIdsString.split(',');
+    const activeEventSources = [];
+
+    ids.forEach((id) => {
+      // 🚀 ON RÉCUPÈRE TON DBID TOUT NEUF :
+      // On cherche l'article correspondant à l'IRI dans notre référence stable
+      const articleFound = articlesRef.current.find(a => a.id === id);
+      const numericId = articleFound?.dbId;
+
+      // Sécurité : si GraphQL n'a pas encore chargé le dbId, on ne lance pas l'écouteur
+      if (!numericId) return;
+
+      const url = new URL('http://localhost:3005/.well-known/mercure');
+      // 🎯 On utilise ton dbId backend parfait pour le topic Mercure
+      url.searchParams.append('topic', `http://mon-projet.com/article/${numericId}`);
+
+      const eventSource = new EventSource(url);
+      console.log(`📡 [Mercure] Écoute active pour l'article ID réel: ${numericId}`);
+
+      eventSource.onmessage = (event) => {
+        const streamData = JSON.parse(event.data);
+        console.log(`📥 [Mercure] Flux reçu pour l'article ${numericId}`);
+
+        setLiveUpdates((prev) => ({
+          ...prev,
+          [id]: {
+            content: streamData.content || '',
+            status: streamData.status
+          }
+        }));
+
+        if (streamData.status === 'success' || streamData.status === 'failed') {
+          console.log(`🛑 [Mercure] Fin détectée pour l'article ${numericId}`);
+          eventSource.close();
+          
+          refetchArticles().then(() => {
+            setLiveUpdates((prev) => {
+              const clone = { ...prev };
+              delete clone[id];
+              return clone;
+            });
+          });
+        }
+      };
+
+      eventSource.onerror = (err) => {
+        console.error(`❌ [Mercure] Erreur sur l'article ${numericId}:`, err);
+      };
+
+      activeEventSources.push(eventSource);
+    });
+
+    return () => {
+      activeEventSources.forEach((es) => es.close());
+    };
+  }, [pageIdsString, refetchArticles]);
+
+  // Chargement secondaire des catégories
   const { data: categoriesData } = useQuery(GET_CATEGORIES, {
     skip: !token,
   });
 
-  // Extraction des données GraphQL pour ton rendu
   const articles = data?.articles?.collection || [];
   const totalItems = data?.articles?.paginationInfo?.totalCount || 0;
-  
   const categories = categoriesData?.categories?.collection || [];
 
-  // ⚡ GESTION DES ACTIONS (VERSION 100% GRAPHQL)
-  
-  // Suppression
   const handleDelete = (id) => {
     mutateDelete({ variables: { id: id } });
-
-    // Si on supprime le dernier article d'une page, on recule d'une page
     if (articles.length === 1 && currentPage > 1) {
       setCurrentPage(currentPage - 1);
     }
   };
 
-  // Ouverture modale édition
   const openEditModal = (article) => {
     setEditingArticle(article);
     editForm.setFieldsValue({
       title: article.title,
-      content: article.content,
-      category: article.category ? article.category.id : undefined, // 💡 GraphQL utilise .id (qui est l'IRI sous API Platform)
+      content: liveUpdates[article.id]?.content ?? article.content,
+      category: article.category ? article.category.id : undefined,
       imageUrl: article.imageUrl
     });
     setIsEditModalVisible(true);
   };
 
-  // Soumission édition
   const handleEditSubmit = (values) => {
     mutateUpdate({
       variables: {
         id: editingArticle.id,
         title: values.title,
         content: values.content,
-        category: values.category || null, // IRI de la catégorie (ex: "/api/categories/3")
+        category: values.category || null,
         imageUrl: values.imageUrl || null
       }
     });
@@ -132,9 +198,7 @@ function App() {
         <Paragraph type="secondary">Explorez votre catalogue propulsé par un filtrage ultra-performant côté serveur.</Paragraph>
       </div>
 
-      {/* --------------------------------------------------------
-          📊 BLOC STATISTIQUES RECONSTRUIT (DYNAMIQUE)
-         -------------------------------------------------------- */}
+      {/* 📊 BLOC STATISTIQUES */}
       {token && (
         <Row gutter={[24, 24]} style={{ marginBottom: '32px' }}>
           <Col xs={24} sm={12} md={12}>
@@ -165,7 +229,7 @@ function App() {
         </Row>
       )}
 
-      {/* Barre de recherche */}
+      {/* Barre de filtrage */}
       <Card style={{ marginBottom: '30px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
         <Row gutter={[16, 16]} align="middle" justify="space-between">
           <Col xs={24} md={10}>
@@ -221,7 +285,7 @@ function App() {
         </Row>
       </Card>
 
-      {/* Grille d'articles avec Spinner de chargement Apollo */}
+      {/* Grille d'affichage */}
       <Spin spinning={loading && articles.length === 0} tip="Chargement des données...">
         {!token ? (
           <Card bordered={false} style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
@@ -232,55 +296,63 @@ function App() {
         ) : (
           <>
             <Row gutter={[24, 24]}>
-              {articles.map((article) => (
-                <Col xs={24} sm={12} lg={8} key={article.id}>
-                  <Card
-                    hoverable
-                    cover={
-                      <img 
-                        alt={article.title} 
-                        src={article.imageUrl || DEFAULT_IMAGE} 
-                        style={{ height: '200px', objectFit: 'cover' }} 
-                      />
-                    }
-                    style={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: '12px', overflow: 'hidden' }}
-                    bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column' }}
-                  >
-                    <div>
-                      <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Tag color={article.category ? 'blue' : 'default'}>
-                          {article.category?.name || 'Général'}
-                        </Tag>
-                        <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                          <CalendarOutlined style={{ marginRight: '4px' }} />
-                          {article.createdAt ? new Date(article.createdAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
-                        </span>
-                      </div>
+              {articles.map((article) => {
+                // 🚀 Fusion à la volée du cache Apollo et du flux en temps réel
+                const currentContent = liveUpdates[article.id]?.content ?? article.content;
+                const currentStatus = liveUpdates[article.id]?.status ?? article.status;
+                const isProcessing = currentStatus === 'processing' || currentStatus === 'pending';
 
-                      <Title level={4} style={{ marginTop: 0, marginBottom: '10px', height: '50px', overflow: 'hidden', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                        {article.title}
-                      </Title>
+                return (
+                  <Col xs={24} sm={12} lg={8} key={article.id}>
+                    <Card
+                      hoverable
+                      cover={
+                        <img 
+                          alt={article.title} 
+                          src={article.imageUrl || DEFAULT_IMAGE} 
+                          style={{ height: '200px', objectFit: 'cover' }} 
+                        />
+                      }
+                      style={{ height: '100%', display: 'flex', flexDirection: 'column', borderRadius: '12px', overflow: 'hidden' }}
+                      bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+                    >
+                      <div>
+                        <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Tag color={isProcessing ? 'orange' : (article.category ? 'blue' : 'default')}>
+                            {isProcessing ? 'Écriture en cours...' : (article.category?.name || 'Général')}
+                          </Tag>
+                          <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                            <CalendarOutlined style={{ marginRight: '4px' }} />
+                            {article.createdAt ? new Date(article.createdAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
+                          </span>
+                        </div>
+
+                        <Title level={4} style={{ marginTop: 0, marginBottom: '10px', height: '50px', overflow: 'hidden', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                          {article.title}
+                        </Title>
+                        
+                        <Paragraph type="secondary" style={{ marginBottom: '20px' }}>
+                          {currentContent 
+                            ? currentContent.replace(/[#*`\-_]/g, '').substring(0, 120) + '...' 
+                            : 'Génération du contenu par l\'IA...'}
+                        </Paragraph>
+                      </div>
                       
-                      <Paragraph type="secondary" style={{ marginBottom: '20px' }}>
-                        {article.content ? article.content.replace(/[#*`\-_]/g, '').substring(0, 120) + '...' : ''}
-                      </Paragraph>
-                    </div>
-                    
-                    <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f0f0f0', paddingTop: '12px' }}>
-                      <Space size="middle">
-                        <Button type="text" icon={<EditOutlined style={{ color: '#1890ff' }} />} onClick={() => openEditModal(article)}>Modifier</Button>
-                        <Popconfirm title="Supprimer ?" onConfirm={() => handleDelete(article.id)} okText="Oui" cancelText="Non" okButtonProps={{ danger: true }}>
-                          <Button type="text" danger icon={<DeleteOutlined />}>Supprimer</Button>
-                        </Popconfirm>
-                      </Space>
-                      <Button type="primary" size="small" icon={<BookOutlined />} onClick={() => { setSelectedArticle(article); setIsModalVisible(true); }}>Lire</Button>
-                    </div>
-                  </Card>
-                </Col>
-              ))}
+                      <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f0f0f0', paddingTop: '12px' }}>
+                        <Space size="middle">
+                          <Button type="text" disabled={isProcessing} icon={<EditOutlined style={{ color: isProcessing ? '#ccc' : '#1890ff' }} />} onClick={() => openEditModal(article)}>Modifier</Button>
+                          <Popconfirm title="Supprimer ?" disabled={isProcessing} onConfirm={() => handleDelete(article.id)} okText="Oui" cancelText="Non" okButtonProps={{ danger: true }}>
+                            <Button type="text" danger disabled={isProcessing} icon={<DeleteOutlined />}>Supprimer</Button>
+                          </Popconfirm>
+                        </Space>
+                        <Button type="primary" size="small" icon={<BookOutlined />} onClick={() => { setSelectedArticle(article); setIsModalVisible(true); }}>Lire</Button>
+                      </div>
+                    </Card>
+                  </Col>
+                );
+              })}
             </Row>
 
-            {/* Pagination de ton composant d'origine */}
             <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'flex-end' }}>
               <Pagination 
                 current={currentPage} 
@@ -294,7 +366,7 @@ function App() {
         )}
       </Spin>
 
-      {/* Modales de lecture et d'édition */}
+      {/* Modale de lecture avec streaming synchrone */}
       <Modal open={isModalVisible} onCancel={() => setIsModalVisible(false)} footer={null} width={800}>
         {selectedArticle && (
           <>
@@ -307,11 +379,18 @@ function App() {
             </div>
             
             <div style={{ marginBottom: '20px', borderBottom: '1px solid #f0f0f0', paddingBottom: '20px' }}>
-              <Tag color={selectedArticle.category ? 'blue' : 'default'} style={{ marginBottom: '10px' }}>{selectedArticle.category?.name || 'Général'}</Tag>
+              <Tag color={(liveUpdates[selectedArticle.id]?.status || selectedArticle.status) === 'processing' ? 'orange' : (selectedArticle.category ? 'blue' : 'default')} style={{ marginBottom: '10px' }}>
+                {(liveUpdates[selectedArticle.id]?.status || selectedArticle.status) === 'processing' ? 'Génération IA active' : (selectedArticle.category?.name || 'Général')}
+              </Tag>
               <Title level={2} style={{ marginTop: 0 }}>{selectedArticle.title}</Title>
               <span style={{ color: '#8c8c8c' }}><CalendarOutlined style={{ marginRight: '8px' }} />Publié le {new Date(selectedArticle.createdAt).toLocaleDateString('fr-FR')}</span>
             </div>
-            <div style={{ fontSize: '16px', lineHeight: '1.6' }}><ReactMarkdown>{selectedArticle.content}</ReactMarkdown></div>
+            <div style={{ fontSize: '16px', lineHeight: '1.6' }}>
+              <ReactMarkdown>
+                {/* 🚀 Met à jour également la liseuse en direct si l'utilisateur l'ouvre pendant l'écriture */}
+                {liveUpdates[selectedArticle.id]?.content ?? selectedArticle.content}
+              </ReactMarkdown>
+            </div>
           </>
         )}
       </Modal>
