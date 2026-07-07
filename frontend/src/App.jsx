@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useApolloClient } from '@apollo/client/react';
 import { 
   Card, Row, Col, Input, Select, Space, Spin, Empty, 
@@ -104,6 +104,30 @@ function App() {
   const hasProcessingArticles = articles.some(
     article => article.status === 'processing' || article.status === 'pending'
   );
+
+  const prevStatusesRef = useRef({});
+
+  // 🔔 Détection des transitions de statut → notification
+  useEffect(() => {
+    articles.forEach(article => {
+      const prevStatus = prevStatusesRef.current[article.id];
+      const wasGenerating = prevStatus === 'processing' || prevStatus === 'pending';
+
+      if (wasGenerating && article.status === 'success') {
+        messageApi.success(`✅ L'article "${article.title}" est prêt !`);
+      }
+
+      if (wasGenerating && article.status === 'failed') {
+        messageApi.error(`❌ La génération de "${article.title}" a échoué.`);
+      }
+    });
+
+    // Mise à jour de la ref pour la prochaine comparaison —
+    // fait ICI, dans l'effet, jamais pendant le render
+    const map = {};
+    articles.forEach(a => { map[a.id] = a.status; });
+    prevStatusesRef.current = map;
+  }, [articles]);
 
   // 2) Effet dédié uniquement au start/stop, basé sur un booléen stable
   useEffect(() => {
