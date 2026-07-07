@@ -54,7 +54,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
     denormalizationContext: ['groups' => ['article:write']],
     paginationItemsPerPage: 6
 )]
-#[ApiFilter(SearchFilter::class, properties: ['title' => 'partial', 'category.name' => 'exact'])]
+#[ApiFilter(SearchFilter::class, properties: ['title' => 'partial', 'category.name' => 'exact', 'status' => 'exact'])]
 #[ApiFilter(OrderFilter::class, properties: ['createdAt'])]
 class Article
 {

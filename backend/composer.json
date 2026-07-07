@@ -88,7 +88,6 @@
             "@test:lint",
             "@test:php-cs-fixer",
             "@test:phpstan",
-            "@test:db-init",
             "@test:phpunit"
         ],
         "test:lint": "php bin/console lint:container && php bin/console lint:yaml config",

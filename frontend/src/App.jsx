@@ -7,7 +7,7 @@ import {
 import { 
   CalendarOutlined, SearchOutlined, SortAscendingOutlined, 
   TagsOutlined, BookOutlined, EditOutlined, DeleteOutlined,
-  FileTextOutlined, RedoOutlined
+  FileTextOutlined, RedoOutlined, FilterOutlined
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import { GET_ARTICLES, GET_CATEGORIES, UPDATE_ARTICLE, DELETE_ARTICLE } from './graphql/articleQueries';
@@ -21,6 +21,7 @@ function App() {
   const [searchText, setSearchText] = useState('');
   const [searchInputValue, setSearchInputValue] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -77,6 +78,7 @@ function App() {
       page: currentPage,
       title: searchText || null,
       categoryName: selectedCategory === 'all' ? null : selectedCategory,
+      status: selectedStatus === 'all' ? null : selectedStatus,
       order: sortBy === 'newest' ? [{ createdAt: 'desc' }] : [{ createdAt: 'asc' }]
     },
     skip: !token, // 🚀 Plus de ligne "pollInterval" ici !
@@ -247,28 +249,40 @@ function App() {
       {/* Barre de recherche */}
       <Card style={{ marginBottom: '30px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
         <Row gutter={[16, 16]} align="middle" justify="space-between">
-          <Col xs={24} md={10}>
+          <Col xs={24} md={8}>
             <Input
               placeholder="Rechercher par titre..."
               prefix={<SearchOutlined />} 
               value={searchInputValue}
-              onChange={(e) => {
-                setSearchInputValue(e.target.value);
-              }}
+              onChange={(e) => setSearchInputValue(e.target.value)}
               allowClear
               size="large"
             />
           </Col>
-          <Col xs={24} md={14} style={{ textAlign: 'right' }}>
+
+          <Col xs={24} md={16} style={{ textAlign: 'right' }}>
             <Space wrap size="middle">
+              <Space>
+                <FilterOutlined />
+                <Select 
+                  value={selectedStatus} 
+                  onChange={(value) => { setSelectedStatus(value); setCurrentPage(1); }} 
+                  style={{ width: 170 }} 
+                  size="large"
+                >
+                  <Select.Option value="all">Tous les statuts</Select.Option>
+                  <Select.Option value="pending">⏳ En attente</Select.Option>
+                  <Select.Option value="processing">⚙️ En cours</Select.Option>
+                  <Select.Option value="success">✅ Réussi</Select.Option>
+                  <Select.Option value="failed">❌ Échec</Select.Option>
+                </Select>
+              </Space>
+
               <Space>
                 <TagsOutlined />
                 <Select 
                   value={selectedCategory} 
-                  onChange={(value) => {
-                    setSelectedCategory(value);
-                    setCurrentPage(1);
-                  }} 
+                  onChange={(value) => { setSelectedCategory(value); setCurrentPage(1); }} 
                   style={{ width: 180 }} 
                   size="large"
                 >
@@ -278,14 +292,12 @@ function App() {
                   ))}
                 </Select>
               </Space>
+
               <Space>
                 <SortAscendingOutlined />
                 <Select 
                   value={sortBy} 
-                  onChange={(value) => {
-                    setSortBy(value);
-                    setCurrentPage(1);
-                  }} 
+                  onChange={(value) => { setSortBy(value); setCurrentPage(1); }} 
                   style={{ width: 190 }} 
                   size="large" 
                   options={[

@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client';
 
 export const GET_ARTICLES = gql`
-  query GetArticles($page: Int, $title: String, $categoryName: String, $order: [ArticleFilter_order]) {
-    articles(page: $page, title: $title, category_name: $categoryName, order: $order) {
+  query GetArticles($page: Int, $title: String, $categoryName: String, $status: String, $order: [ArticleFilter_order]) {
+    articles(page: $page, title: $title, category_name: $categoryName, status: $status, order: $order) {
       collection {
         id
         title
