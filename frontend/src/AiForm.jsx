@@ -48,6 +48,7 @@ function AiForm() {
         messageApi.success("Ordre de génération envoyé à l'IA avec succès !");
         form.resetFields();
         client.cache.evict({ fieldName: 'articles' });
+        client.cache.evict({ fieldName: 'categories' });
         client.cache.gc();
         // 🚀 Redirection immédiate vers la page d'accueil.
         // Comme ton App.jsx a un pollInterval de 5s, l'article apparaîtra vide,

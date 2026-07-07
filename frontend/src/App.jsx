@@ -7,7 +7,7 @@ import {
 import { 
   CalendarOutlined, SearchOutlined, SortAscendingOutlined, 
   TagsOutlined, BookOutlined, EditOutlined, DeleteOutlined,
-  FileTextOutlined, RedoOutlined, FilterOutlined
+  FileTextOutlined, RedoOutlined, FilterOutlined, SyncOutlined
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import { GET_ARTICLES, GET_CATEGORIES, UPDATE_ARTICLE, DELETE_ARTICLE } from './graphql/articleQueries';
@@ -59,6 +59,7 @@ function App() {
     onCompleted: () => {
       messageApi.success('Article supprimé !');
       refetchArticles(); // Force la grille à se recharger proprement
+      refetchCategories(); // Mettre à jour le compteur de stats
     },
     onError: (err) => messageApi.error(`Erreur de suppression : ${err.message}`)
   });
@@ -67,6 +68,7 @@ function App() {
     onCompleted: () => {
       messageApi.success('Article modifié !');
       refetchArticles(); // Synchronise la modification à l'écran
+      refetchCategories();
       setIsEditModalVisible(false);
     },
     onError: (err) => messageApi.error(`Erreur de modification : ${err.message}`)
@@ -92,7 +94,7 @@ function App() {
   }); 
 
   // 2. Chargement des catégories pour le filtre et les statistiques
-  const { data: categoriesData } = useQuery(GET_CATEGORIES, {
+  const { data: categoriesData, refetch: refetchCategories } = useQuery(GET_CATEGORIES, {
     skip: !token,
   });
 
@@ -103,9 +105,11 @@ function App() {
   const categories = categoriesData?.categories?.collection || [];
 
   // 🔄 Gestionnaire de Polling Intelligent avec Verrou anti-réinitialisation
-  const hasProcessingArticles = articles.some(
+  const processingCount = articles.filter(
     article => article.status === 'processing' || article.status === 'pending'
-  );
+  ).length;
+
+  const hasProcessingArticles = processingCount > 0;
 
   const prevStatusesRef = useRef({});
 
@@ -158,6 +162,7 @@ function App() {
         client.cache.evict({ fieldName: 'articles' });
         client.cache.gc();
         refetchArticles(); // relance immédiatement le fetch pour voir passer le statut à 'processing'
+        refetchCategories(); // pour mettre à jour le compteur de stats côté catégorie
       } else {
         const errData = await response.json();
         messageApi.error(`Erreur : ${errData['hydra:description'] || 'Impossible de relancer'}`);
@@ -226,6 +231,12 @@ function App() {
                 loading={loading && articles.length === 0}
                 prefix={<FileTextOutlined style={{ color: '#1677ff' }} />} 
               />
+              {processingCount > 0 && (
+                <div style={{ marginTop: '8px', fontSize: '13px', color: '#fa8c16' }}>
+                  <SyncOutlined spin style={{ marginRight: '6px' }} />
+                  {processingCount} article{processingCount > 1 ? 's' : ''} en cours de génération
+                </div>
+              )}
             </Card>
           </Col>
           <Col xs={24} sm={12} md={12}>

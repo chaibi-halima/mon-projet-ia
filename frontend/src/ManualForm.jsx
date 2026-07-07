@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@apollo/client/react'; // 💡 Ajout d'Apollo
+import { useMutation, useQuery, useApolloClient } from '@apollo/client/react'; // 💡 Ajout d'Apollo
 import { useNavigate } from 'react-router-dom'; // 💡 Pour la redirection
 import { Form, Input, Button, Select, Card, Typography, message } from 'antd';
 import { CREATE_ARTICLE, GET_CATEGORIES } from './graphql/articleQueries';
@@ -8,10 +8,11 @@ const { Title } = Typography;
 function ManualForm() {
   const [form] = Form.useForm();
   const navigate = useNavigate();
+  const client = useApolloClient();
   const [messageApi, contextHolder] = message.useMessage();
 
   // 1. Charger les vraies catégories pour le menu déroulant
-  const { data: categoriesData } = useQuery(GET_CATEGORIES);
+  const { data: categoriesData, refetch: refetchCategories } = useQuery(GET_CATEGORIES);
   const categories = categoriesData?.categories?.collection || [];
 
   // 2. Déclarer la mutation de création
@@ -19,7 +20,10 @@ function ManualForm() {
     onCompleted: () => {
       messageApi.success('Article créé avec succès !');
       form.resetFields();
+      client.cache.evict({ fieldName: 'articles' });
+      client.cache.gc(); 
       navigate('/'); // 🚀 Redirection vers la bibliothèque
+      refetchCategories();
     },
     onError: (err) => {
       messageApi.error(`Erreur lors de la création : ${err.message}`);
@@ -33,6 +37,7 @@ function ManualForm() {
         content: values.content,
         category: values.category || null, // IRI ou ID de la catégorie
         imageUrl: values.imageUrl || null,
+        status: 'success' // On peut définir un statut par défaut si nécessaire
       }
     });
   };

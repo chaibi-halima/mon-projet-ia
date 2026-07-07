@@ -41,8 +41,8 @@ export const GET_CATEGORIES = gql`
 
 // 🌟 Mutation pour créer un article
 export const CREATE_ARTICLE = gql`
-  mutation CreateArticle($title: String!, $content: String!, $category: String, $imageUrl: String) {
-    createArticle(input: { title: $title, content: $content, category: $category, imageUrl: $imageUrl }) {
+  mutation CreateArticle($title: String!, $content: String!, $category: String, $imageUrl: String, $status: String!) {
+    createArticle(input: { title: $title, content: $content, category: $category, imageUrl: $imageUrl, status: $status }) {
       article {
         id
         title
