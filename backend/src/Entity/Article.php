@@ -96,6 +96,10 @@ class Article
     #[Groups(['article:read', 'article:write'])]
     private string $status = 'pending'; // État initial obligatoire
 
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['article:read', 'article:write'])]
+    private ?\DateTimeImmutable $scheduledAt = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -193,6 +197,18 @@ class Article
     public function setStatus(string $status): self
     {
         $this->status = $status;
+
+        return $this;
+    }
+
+    public function getScheduledAt(): ?\DateTimeImmutable
+    {
+        return $this->scheduledAt;
+    }
+
+    public function setScheduledAt(?\DateTimeImmutable $scheduledAt): static
+    {
+        $this->scheduledAt = $scheduledAt;
 
         return $this;
     }

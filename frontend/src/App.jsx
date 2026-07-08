@@ -7,7 +7,7 @@ import {
 import { 
   CalendarOutlined, SearchOutlined, SortAscendingOutlined, 
   TagsOutlined, BookOutlined, EditOutlined, DeleteOutlined,
-  FileTextOutlined, RedoOutlined, FilterOutlined, SyncOutlined
+  FileTextOutlined, RedoOutlined, FilterOutlined, SyncOutlined, ClockCircleOutlined
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import { GET_ARTICLES, GET_CATEGORIES, UPDATE_ARTICLE, DELETE_ARTICLE } from './graphql/articleQueries';
@@ -353,8 +353,16 @@ function App() {
                           {article.category?.name || 'Général'}
                         </Tag>
                         <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                          <CalendarOutlined style={{ marginRight: '4px' }} />
-                          {article.createdAt ? new Date(article.createdAt).toLocaleDateString('fr-FR') : 'Date inconnue'}
+                          {article.status === 'scheduled' && article.scheduledAt ? (
+                            <Tag color="purple" icon={<ClockCircleOutlined />}>
+                              Programmé : {new Date(article.scheduledAt).toLocaleString('fr-FR')}
+                            </Tag>
+                          ) : (
+                            <>
+                              <CalendarOutlined style={{ marginRight: '4px' }} />
+                              {article.createdAt ? new Date(article.createdAt).toLocaleString('fr-FR') : 'Date inconnue'}
+                            </>
+                            )}
                         </span>
                       </div>
 
@@ -423,7 +431,18 @@ function App() {
             <div style={{ marginBottom: '20px', borderBottom: '1px solid #f0f0f0', paddingBottom: '20px' }}>
               <Tag color={selectedArticle.category ? 'blue' : 'default'} style={{ marginBottom: '10px' }}>{selectedArticle.category?.name || 'Général'}</Tag>
               <Title level={2} style={{ marginTop: 0 }}>{selectedArticle.title}</Title>
-              <span style={{ color: '#8c8c8c' }}><CalendarOutlined style={{ marginRight: '8px' }} />Publié le {new Date(selectedArticle.createdAt).toLocaleDateString('fr-FR')}</span>
+              <span style={{ color: '#8c8c8c' }}>
+              {selectedArticle.status === 'scheduled' && selectedArticle.scheduledAt ? (
+                <Tag color="purple" icon={<ClockCircleOutlined />}>
+                  Programmé : {new Date(selectedArticle.scheduledAt).toLocaleString('fr-FR')}
+                </Tag>
+                ) : (
+                <>
+                  <CalendarOutlined style={{ marginRight: '8px' }} />
+                  Publié le {new Date(selectedArticle.createdAt).toLocaleDateString('fr-FR')}
+                </>
+              )}
+              </span>
             </div>
             <div style={{ fontSize: '16px', lineHeight: '1.6' }}><ReactMarkdown>{selectedArticle.content}</ReactMarkdown></div>
           </>

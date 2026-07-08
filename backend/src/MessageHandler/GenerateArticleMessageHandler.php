@@ -74,7 +74,17 @@ class GenerateArticleMessageHandler
                 // Si $imageUrl est null, on ne fait rien — le front utilisera DEFAULT_IMAGE comme fallback
             }
 
-            if ($this->articleGenerationWorkflow->can($article, 'mark_success')) {
+            $now = new \DateTimeImmutable();
+            if ($article->getScheduledAt() && $article->getScheduledAt() > $now) {
+                if ($this->articleGenerationWorkflow->can($article, 'schedule')) {
+                    $this->articleGenerationWorkflow->apply($article, 'schedule');
+                    $this->entityManager->flush();
+                    $this->logger->info('Article {id} : programmé pour publication le {date}', [
+                        'id' => $article->getId(),
+                        'date' => $article->getScheduledAt()->format('Y-m-d H:i:s'),
+                    ]);
+                }
+            } elseif ($this->articleGenerationWorkflow->can($article, 'mark_success')) {
                 $this->articleGenerationWorkflow->apply($article, 'mark_success');
                 $this->entityManager->flush();
                 $this->logger->info("Article {id} : génération réussie ('success')", ['id' => $article->getId()]);

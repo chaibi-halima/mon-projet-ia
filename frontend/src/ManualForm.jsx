@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useApolloClient } from '@apollo/client/react'; // 💡 Ajout d'Apollo
 import { useNavigate } from 'react-router-dom'; // 💡 Pour la redirection
-import { Form, Input, Button, Select, Card, Typography, message } from 'antd';
+import { Form, Input, Button, Select, Card, Typography, message, DatePicker } from 'antd';
 import { CREATE_ARTICLE, GET_CATEGORIES } from './graphql/articleQueries';
+import dayjs from 'dayjs';
 
 const { Title } = Typography;
 
@@ -31,13 +32,15 @@ function ManualForm() {
   });
 
   const onFinish = (values) => {
+    const isScheduled = !!values.scheduledAt;
     createArticle({
       variables: {
         title: values.title,
         content: values.content,
         category: values.category || null, // IRI ou ID de la catégorie
         imageUrl: values.imageUrl || null,
-        status: 'success' // On peut définir un statut par défaut si nécessaire
+        status: isScheduled ? 'scheduled' : 'success',
+        scheduledAt: isScheduled ? values.scheduledAt.toISOString() : null,
       }
     });
   };
@@ -67,6 +70,17 @@ function ManualForm() {
 
           <Form.Item name="imageUrl" label="URL de l'image de couverture">
             <Input placeholder="https://images.unsplash.com/..." size="large" />
+          </Form.Item>
+
+          <Form.Item name="scheduledAt" label="Publier plus tard (optionnel)">
+            <DatePicker 
+              showTime 
+              format="DD/MM/YYYY HH:mm" 
+              disabledDate={(current) => current && current < dayjs().startOf('day')}
+              placeholder="Laisser vide pour publier immédiatement"
+              style={{ width: '100%' }}
+              size="large"
+            />
           </Form.Item>
 
           <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>

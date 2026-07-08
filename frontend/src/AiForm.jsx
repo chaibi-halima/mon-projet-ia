@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useApolloClient } from '@apollo/client/react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Button, Card, Typography, message, Select, Row, Col } from 'antd';
+import { Form, Input, Button, Card, Typography, message, Select, Row, Col, DatePicker } from 'antd';
 import { GET_CATEGORIES } from './graphql/articleQueries';
 import { RobotOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 
 const { Title, Paragraph } = Typography;
 
@@ -28,7 +29,8 @@ function AiForm() {
       category: values.category ?? null, // IRI de la catégorie
       tone: values.tone || 'professionnel',
       length: values.length || 'moyen',
-      imageUrl: values.imageUrl || null
+      imageUrl: values.imageUrl || null,
+      scheduledAt: values.scheduledAt ? values.scheduledAt.toISOString() : null,
     };
 
     try {
@@ -45,14 +47,15 @@ function AiForm() {
       setGenerating(false);
 
       if (response.ok) {
-        messageApi.success("Ordre de génération envoyé à l'IA avec succès !");
+        messageApi.success(
+          values.scheduledAt 
+            ? "Article programmé ! Il sera publié après génération, à la date choisie." 
+            : "Ordre de génération envoyé à l'IA avec succès !"
+        );
         form.resetFields();
         client.cache.evict({ fieldName: 'articles' });
         client.cache.evict({ fieldName: 'categories' });
         client.cache.gc();
-        // 🚀 Redirection immédiate vers la page d'accueil.
-        // Comme ton App.jsx a un pollInterval de 5s, l'article apparaîtra vide,
-        // puis se remplira automatiquement dès que Ollama aura fini son travail !
         navigate('/'); 
       } else {
         const errData = await response.json();
@@ -117,6 +120,17 @@ function AiForm() {
             <Input placeholder="https://images.unsplash.com/... (Laissé vide, Picsum s'en chargera)" size="large" />
           </Form.Item>
 
+          <Form.Item name="scheduledAt" label="Publier plus tard (optionnel)">
+            <DatePicker 
+              showTime 
+              format="DD/MM/YYYY HH:mm" 
+              disabledDate={(current) => current && current < dayjs().startOf('day')}
+              placeholder="Laisser vide pour publier immédiatement"
+              style={{ width: '100%' }}
+              size="large"
+            />
+          </Form.Item>
+  
           <Form.Item style={{ marginBottom: 0, textAlign: 'right', marginTop: '24px' }}>
             <Button type="primary" htmlType="submit" size="large" icon={<RobotOutlined />} loading={generating}>
               {generating ? "Envoi à l'IA..." : "Lancer la génération asynchrone"}

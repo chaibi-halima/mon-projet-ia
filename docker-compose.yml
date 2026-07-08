@@ -108,6 +108,25 @@ services:
       DATABASE_URL: "mysql://root:root@database:3306/app_db?serverVersion=8.0.32&charset=utf8mb4"
       MESSENGER_TRANSPORT_DSN: doctrine://default
 
+  scheduler-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mon-projet-ia-scheduler
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    command: php bin/console messenger:consume scheduler_default -vv
+    volumes:
+      - ./backend:/app
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      APP_ENV: dev
+      DATABASE_URL: "mysql://root:root@database:3306/app_db?serverVersion=8.0.32&charset=utf8mb4"
+      MESSENGER_TRANSPORT_DSN: doctrine://default
+
 volumes:
   caddy_data:
   caddy_config:

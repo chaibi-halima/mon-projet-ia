@@ -5,14 +5,15 @@ framework:
             type: 'state_machine'
             marking_store:
                 type: 'method'
-                property: 'status' # Symfony appellera getStatus() et setStatus()
+                property: 'status'
             supports:
                 - App\Entity\Article
             places:
-                - pending      # En attente dans la file Messenger
-                - processing   # L'IA est en train de générer le contenu
-                - success      # Génération réussie et enregistrée
-                - failed       # Erreur (timeout, crash Ollama, etc.)
+                - pending
+                - processing
+                - scheduled
+                - success
+                - failed
             transitions:
                 start_processing:
                     from: pending
@@ -26,3 +27,9 @@ framework:
                 return_processing:
                     from: failed
                     to:   processing
+                schedule:
+                    from: [pending, processing]
+                    to:   scheduled
+                publish_scheduled:
+                    from: scheduled
+                    to:   success

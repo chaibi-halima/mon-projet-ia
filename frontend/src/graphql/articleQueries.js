@@ -10,6 +10,7 @@ export const GET_ARTICLES = gql`
         status
         imageUrl
         createdAt
+        scheduledAt
         category {
           id
           name
@@ -41,8 +42,8 @@ export const GET_CATEGORIES = gql`
 
 // 🌟 Mutation pour créer un article
 export const CREATE_ARTICLE = gql`
-  mutation CreateArticle($title: String!, $content: String!, $category: String, $imageUrl: String, $status: String!) {
-    createArticle(input: { title: $title, content: $content, category: $category, imageUrl: $imageUrl, status: $status }) {
+  mutation CreateArticle($title: String!, $content: String!, $category: String, $imageUrl: String, $status: String!, $scheduledAt: String) {
+    createArticle(input: { title: $title, content: $content, category: $category, imageUrl: $imageUrl, status: $status, scheduledAt: $scheduledAt }) {
       article {
         id
         title
