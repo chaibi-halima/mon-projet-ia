@@ -104,6 +104,7 @@ services:
     environment:
       # Copie ici les mêmes variables d'environnement que ton service webgateway
       # (DATABASE_URL, MESSENGER_TRANSPORT_DSN, OLLAMA_HOST, etc.)
+      APP_ENV: dev
       DATABASE_URL: "mysql://root:root@database:3306/app_db?serverVersion=8.0.32&charset=utf8mb4"
       MESSENGER_TRANSPORT_DSN: doctrine://default
 

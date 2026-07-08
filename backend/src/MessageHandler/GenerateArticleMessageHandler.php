@@ -4,6 +4,7 @@ namespace App\MessageHandler;
 
 use App\Entity\Article;
 use App\Message\GenerateArticleMessage;
+use App\Service\UnsplashImageProvider; // 👈 ajout
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\AI\Platform\Message\Content\Text;
@@ -26,19 +27,11 @@ class GenerateArticleMessageHandler
         private readonly LoggerInterface $logger,
 
         private readonly PlatformInterface $platform,
+        private readonly UnsplashImageProvider $imageProvider, // 👈 ajout
 
         #[Target('article_generation')]
         private readonly WorkflowInterface $articleGenerationWorkflow,
     ) {
-    }
-
-    private function getLengthInstruction(?string $length): string
-    {
-        return match ($length) {
-            'court' => 'environ 200 mots',
-            'long' => '1000 mots ou plus',
-            default => 'environ 500 mots', // 'moyen' ou valeur inconnue
-        };
     }
 
     public function __invoke(GenerateArticleMessage $message): void
@@ -50,7 +43,6 @@ class GenerateArticleMessageHandler
             return;
         }
 
-        // 1. Passage à l'état "processing" (L'IA commence le travail)
         if ($this->articleGenerationWorkflow->can($article, 'start_processing')) {
             $this->articleGenerationWorkflow->apply($article, 'start_processing');
             $this->entityManager->flush();
@@ -58,24 +50,29 @@ class GenerateArticleMessageHandler
         }
 
         try {
-            $messages = new MessageBag();
-
-            // 2. Ajouter les messages un par un
-            // Note : SystemMessage attend un string, UserMessage attend un Text
-            $messages->add(new SystemMessage("Tu es un rédacteur web expert. Ton: {$message->getTone()}."));
             $lengthInstruction = $this->getLengthInstruction($message->getLength());
+
+            $messages = new MessageBag();
+            $messages->add(new SystemMessage("Tu es un rédacteur web expert. Ton: {$message->getTone()}."));
             $messages->add(new UserMessage(new Text(
                 "Rédige un article de {$lengthInstruction} sur : {$message->getTopic()}"
             )));
 
-            // Appel à la plateforme
             $result = $this->platform->invoke('llama3.2', $messages);
             $this->logger->debug('Appel IA réussi, traitement du résultat...');
 
             $content = $result->getResult()->getContent();
-
-            // Si c'est un objet, le cast (string) appelle sa méthode __toString()
             $article->setContent((string) $content);
+
+            // 🖼️ Recherche d'une image de couverture UNIQUEMENT si aucune n'a été fournie manuellement
+            if (!$article->getImageUrl()) {
+                $imageUrl = $this->imageProvider->findImageForTopic($message->getTopic());
+                if ($imageUrl) {
+                    $article->setImageUrl($imageUrl);
+                    $this->logger->info('Article {id} : image de couverture trouvée via Unsplash', ['id' => $article->getId()]);
+                }
+                // Si $imageUrl est null, on ne fait rien — le front utilisera DEFAULT_IMAGE comme fallback
+            }
 
             if ($this->articleGenerationWorkflow->can($article, 'mark_success')) {
                 $this->articleGenerationWorkflow->apply($article, 'mark_success');
@@ -83,7 +80,6 @@ class GenerateArticleMessageHandler
                 $this->logger->info("Article {id} : génération réussie ('success')", ['id' => $article->getId()]);
             }
         } catch (\Exception $e) {
-            // Log critique avec le contexte complet
             if ($this->articleGenerationWorkflow->can($article, 'mark_failed')) {
                 $this->articleGenerationWorkflow->apply($article, 'mark_failed');
                 $this->entityManager->flush();
@@ -94,8 +90,16 @@ class GenerateArticleMessageHandler
                 'msg' => $e->getMessage(),
             ]);
 
-            // Crucial : on relance l'exception pour que Symfony Messenger place le message dans la queue 'failed'
             throw $e;
         }
+    }
+
+    private function getLengthInstruction(?string $length): string
+    {
+        return match ($length) {
+            'court' => 'environ 200 mots',
+            'long' => '1000 mots ou plus',
+            default => 'environ 500 mots',
+        };
     }
 }

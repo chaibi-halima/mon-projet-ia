@@ -10,7 +10,8 @@ framework:
         default_options:
             verify_peer: false
             verify_host: false
-            timeout: 300
+            timeout: 900
+            max_duration: 900
 
     #esi: true
     #fragments: true
