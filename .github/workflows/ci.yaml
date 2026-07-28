@@ -17,6 +17,10 @@ jobs:
       - name: Start Docker Compose services
         run: docker compose up -d --build
 
+      - name: Check container logs on failure
+        if: failure()
+        run: docker compose logs
+
       - name: Wait for services
         run: sleep 10
 
