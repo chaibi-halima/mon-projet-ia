@@ -14,6 +14,10 @@ self.addEventListener('install', (event) => {
 
 // 2. Interception des requêtes : Stratégie Network-First avec Fallback Cache
 self.addEventListener('fetch', (event) => {
+  // 🚀 SÉCURITÉ : On interdit au Service Worker d'intercepter Mercure / SSE
+  if (event.request.url.includes('.well-known/mercure')) {
+    return; // Laisse le navigateur gérer la connexion en direct
+  }
   // On ne met pas en cache les requêtes vers l'API Symfony (pour toujours avoir les vrais articles récents)
   if (event.request.url.includes('/api/')) {
     return;

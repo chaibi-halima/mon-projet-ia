@@ -50,6 +50,7 @@ use Symfony\Component\Serializer\Attribute\Groups;
         new Mutation(name: 'update'),
         new DeleteMutation(name: 'delete'),
     ],
+    mercure: ['private' => false],
     normalizationContext: ['groups' => ['article:read']],
     denormalizationContext: ['groups' => ['article:write']],
     paginationItemsPerPage: 6

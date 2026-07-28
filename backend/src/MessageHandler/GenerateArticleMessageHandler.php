@@ -4,18 +4,16 @@ namespace App\MessageHandler;
 
 use App\Entity\Article;
 use App\Message\GenerateArticleMessage;
-use App\Service\UnsplashImageProvider; // 👈 ajout
+use App\Service\UnsplashImageProvider;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
-use Symfony\AI\Platform\Message\Content\Text;
-use Symfony\AI\Platform\Message\MessageBag;
-use Symfony\AI\Platform\Message\SystemMessage;
-use Symfony\AI\Platform\Message\UserMessage;
-use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Mercure\HubInterface;
+use Symfony\Component\Mercure\Update;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Workflow\WorkflowInterface;
+use Symfony\Contracts\HttpClient\HttpClientInterface; // 🚀 Pour streamer les tokens en direct
 
 #[AsMessageHandler]
 class GenerateArticleMessageHandler
@@ -26,11 +24,13 @@ class GenerateArticleMessageHandler
         #[Autowire(service: 'monolog.logger.ai_generator')]
         private readonly LoggerInterface $logger,
 
-        private readonly PlatformInterface $platform,
-        private readonly UnsplashImageProvider $imageProvider, // 👈 ajout
+        private readonly UnsplashImageProvider $imageProvider,
 
         #[Target('article_generation')]
         private readonly WorkflowInterface $articleGenerationWorkflow,
+
+        private readonly HubInterface $hub,
+        private readonly HttpClientInterface $httpClient, // 👈 Injection du client HTTP
     ) {
     }
 
@@ -43,51 +43,121 @@ class GenerateArticleMessageHandler
             return;
         }
 
+        $topicUrl = 'http://mon-projet.com/article/'.$article->getId();
+
+        // 1️⃣ Transition Workflow : Démarrage
         if ($this->articleGenerationWorkflow->can($article, 'start_processing')) {
             $this->articleGenerationWorkflow->apply($article, 'start_processing');
             $this->entityManager->flush();
             $this->logger->info("Article {id} : transition vers 'processing'", ['id' => $article->getId()]);
+
+            $this->hub->publish(new Update(
+                $topicUrl,
+                json_encode([
+                    'id' => $article->getId(),
+                    'status' => 'processing',
+                    'content' => '',
+                ]),
+                false
+            ));
         }
 
         try {
             $lengthInstruction = $this->getLengthInstruction($message->getLength());
 
-            $messages = new MessageBag();
-            $messages->add(new SystemMessage("Tu es un rédacteur web expert. Ton: {$message->getTone()}."));
-            $messages->add(new UserMessage(new Text(
-                "Rédige un article de {$lengthInstruction} sur : {$message->getTopic()}"
-            )));
+            $this->logger->debug('Démarrage du streaming HTTP Ollama...');
 
-            $result = $this->platform->invoke('llama3.2', $messages);
-            $this->logger->debug('Appel IA réussi, traitement du résultat...');
+            // 2️⃣ Connexion au flux Ollama avec "stream" => true
+            // Ajuste l'URL 'http://ollama:11434' selon le nom de ton conteneur Ollama
+            $response = $this->httpClient->request('POST', 'http://ollama:11434/api/chat', [
+                'json' => [
+                    'model' => 'llama3.2',
+                    'messages' => [
+                        ['role' => 'system', 'content' => "Tu es un rédacteur web expert. Ton: {$message->getTone()}."],
+                        ['role' => 'user', 'content' => "Rédige un article de {$lengthInstruction} sur : {$message->getTopic()}"],
+                    ],
+                    'stream' => true, // 🚀 Active le mode streaming d'Ollama
+                ],
+            ]);
 
-            $content = $result->getResult()->getContent();
-            $article->setContent((string) $content);
+            $fullContent = '';
 
-            // 🖼️ Recherche d'une image de couverture UNIQUEMENT si aucune n'a été fournie manuellement
+            // 3️⃣ Boucle de streaming : On lit chaque morceau de texte au moment précis où Llama le génère
+            foreach ($this->httpClient->stream($response) as $chunk) {
+                if ($chunk->isTimeout()) {
+                    continue;
+                }
+
+                $rawContent = $chunk->getContent();
+                $lines = explode("\n", trim($rawContent));
+
+                foreach ($lines as $line) {
+                    if (empty($line)) {
+                        continue;
+                    }
+
+                    $data = json_decode($line, true);
+
+                    // Extraction du mot / de la syllabe générée
+                    if (isset($data['message']['content'])) {
+                        $textChunk = $data['message']['content'];
+                        $fullContent .= $textChunk;
+
+                        // 📡 Publication sur Mercure MOT PAR MOT
+                        $this->hub->publish(new Update(
+                            $topicUrl,
+                            json_encode([
+                                'id' => $article->getId(),
+                                'status' => 'processing',
+                                'chunk' => $textChunk,
+                            ]),
+                            false
+                        ));
+                    }
+                }
+            }
+
+            // Sauvegarde globale du contenu
+            $article->setContent($fullContent);
+
+            // 4️⃣ Image Unsplash
             if (!$article->getImageUrl()) {
                 $imageUrl = $this->imageProvider->findImageForTopic($message->getTopic());
                 if ($imageUrl) {
                     $article->setImageUrl($imageUrl);
-                    $this->logger->info('Article {id} : image de couverture trouvée via Unsplash', ['id' => $article->getId()]);
                 }
-                // Si $imageUrl est null, on ne fait rien — le front utilisera DEFAULT_IMAGE comme fallback
             }
 
+            // 5️⃣ Finalisation
             $now = new \DateTimeImmutable();
             if ($article->getScheduledAt() && $article->getScheduledAt() > $now) {
                 if ($this->articleGenerationWorkflow->can($article, 'schedule')) {
                     $this->articleGenerationWorkflow->apply($article, 'schedule');
                     $this->entityManager->flush();
-                    $this->logger->info('Article {id} : programmé pour publication le {date}', [
-                        'id' => $article->getId(),
-                        'date' => $article->getScheduledAt()->format('Y-m-d H:i:s'),
-                    ]);
+
+                    $this->hub->publish(new Update(
+                        $topicUrl,
+                        json_encode([
+                            'id' => $article->getId(),
+                            'status' => 'scheduled',
+                            'imageUrl' => $article->getImageUrl(),
+                        ]),
+                        false
+                    ));
                 }
             } elseif ($this->articleGenerationWorkflow->can($article, 'mark_success')) {
                 $this->articleGenerationWorkflow->apply($article, 'mark_success');
                 $this->entityManager->flush();
-                $this->logger->info("Article {id} : génération réussie ('success')", ['id' => $article->getId()]);
+
+                $this->hub->publish(new Update(
+                    $topicUrl,
+                    json_encode([
+                        'id' => $article->getId(),
+                        'status' => 'success',
+                        'imageUrl' => $article->getImageUrl(),
+                    ]),
+                    false
+                ));
             }
         } catch (\Exception $e) {
             if ($this->articleGenerationWorkflow->can($article, 'mark_failed')) {
@@ -95,10 +165,15 @@ class GenerateArticleMessageHandler
                 $this->entityManager->flush();
             }
 
-            $this->logger->error("Échec de la génération pour l'article {id}. Erreur : {msg}", [
-                'id' => $article->getId(),
-                'msg' => $e->getMessage(),
-            ]);
+            $this->hub->publish(new Update(
+                $topicUrl,
+                json_encode([
+                    'id' => $article->getId(),
+                    'status' => 'failed',
+                    'error' => $e->getMessage(),
+                ]),
+                false
+            ));
 
             throw $e;
         }

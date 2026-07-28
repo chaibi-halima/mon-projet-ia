@@ -149,6 +149,77 @@ function App() {
     return () => stopPolling();
   }, [stopPolling]);
 
+ // --------------------------------------------------------
+  // 📡 ÉCOUTE TEMPS RÉEL MERCURE (STREAMING MOT PAR MOT)
+  // --------------------------------------------------------
+  useEffect(() => {
+    if (!token) return;
+
+    const hubUrl = new URL('http://localhost:3005/.well-known/mercure');
+    // Le pattern {id} permet à Mercure d'écouter les updates de n'importe quel article
+    hubUrl.searchParams.append('topic', 'http://mon-projet.com/article/{id}');
+
+    const eventSource = new EventSource(hubUrl);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('📨 Chunk Mercure reçu :', data);
+
+        if (!data.id) return;
+
+        // 1. Reconstitution de l'IRI API Platform (ex: "/api/articles/24")
+        const articleIri = typeof data.id === 'number' ? `/api/articles/${data.id}` : data.id;
+
+        // 2. Injection instantanée du "chunk" dans le Cache Apollo
+        client.cache.modify({
+          id: client.cache.identify({ __typename: 'Article', id: articleIri }) 
+              || client.cache.identify({ __typename: 'Article', id: data.id }),
+          fields: {
+            content(existingContent = '') {
+              // On concatène la nouvelle syllabe/mot au texte déjà présent
+              return data.chunk ? existingContent + data.chunk : existingContent;
+            },
+            status(existingStatus) {
+              return data.status || existingStatus;
+            },
+            imageUrl(existingUrl) {
+              return data.imageUrl || existingUrl;
+            }
+          }
+        });
+
+        // 3. Si l'utilisateur a ouvert la modale "Lire" pour cet article, on met aussi le texte à jour en direct !
+        setSelectedArticle((prevSelected) => {
+          if (prevSelected && (prevSelected.id === articleIri || prevSelected.id === data.id)) {
+            return {
+              ...prevSelected,
+              content: data.chunk ? (prevSelected.content || '') + data.chunk : prevSelected.content,
+              status: data.status || prevSelected.status,
+              imageUrl: data.imageUrl || prevSelected.imageUrl,
+            };
+          }
+          return prevSelected;
+        });
+
+        // 4. Une fois l'article totalement rédigé ou en échec, on synchronise les compteurs de catégories
+        if (data.status === 'success' || data.status === 'failed') {
+          refetchArticles();
+          refetchCategories();
+        }
+
+      } catch (err) {
+        console.error('Erreur lors du traitement du message Mercure :', err);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('Mercure EventSource error:', err);
+    };
+
+    return () => eventSource.close();
+  }, [token, client, refetchArticles, refetchCategories]);
+
   const handleRetry = async (id) => {
     const token = localStorage.getItem('jwt_token');
     try {

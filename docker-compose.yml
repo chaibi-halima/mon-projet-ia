@@ -83,10 +83,25 @@ services:
     # 💡 MODIFICATION ICI : On remplace "llama3" par "llama3.2" (ou "phi3")
     entrypoint: [ "curl", "-X", "POST", "http://ollama:11434/api/pull", "-d", '{"name": "llama3.2"}' ]
 
+  mercure:
+    image: dunglas/mercure
+    container_name: mon-projet-ia-mercure
+    restart: unless-stopped
+    environment:
+      SERVER_NAME: ':80'
+      MERCURE_PUBLISHER_JWT_KEY: '!ChangeThisMercureHubJWTSecretKey!'
+      MERCURE_SUBSCRIBER_JWT_KEY: '!ChangeThisMercureHubJWTSecretKey!'
+      MERCURE_EXTRA_DIRECTIVES: |
+        cors_origins http://localhost:3000
+        anonymous
+    ports:
+      - "3005:80"
+
   messenger-worker:
     build:
       context: ./backend
       dockerfile: Dockerfile # Utilise le même Dockerfile que ton app PHP
+    user: "root"
     container_name: mon-projet-ia-worker
     restart: unless-stopped
     healthcheck:
