@@ -133,7 +133,7 @@ function App() {
     const map = {};
     articles.forEach(a => { map[a.id] = a.status; });
     prevStatusesRef.current = map;
-  }, [articles]);
+  }, [articles, messageApi]);
 
   // 2) Effet dédié uniquement au start/stop, basé sur un booléen stable
   useEffect(() => {
@@ -238,7 +238,7 @@ function App() {
         const errData = await response.json();
         messageApi.error(`Erreur : ${errData['hydra:description'] || 'Impossible de relancer'}`);
       }
-    } catch (error) {
+    } catch {
       messageApi.error("Erreur réseau lors de la relance.");
     }
   };

@@ -27,7 +27,7 @@ class PublishScheduledArticlesMessageHandler
     ) {
     }
 
-    public function __invoke(PublishScheduledArticlesMessage $message): void
+    public function __invoke(PublishScheduledArticlesMessage $_message): void
     {
         $now = new \DateTimeImmutable();
 

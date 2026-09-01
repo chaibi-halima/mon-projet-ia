@@ -61,7 +61,7 @@ function AiForm() {
         const errData = await response.json();
         messageApi.error(`Erreur serveur : ${errData['hydra:description'] || 'Impossible de générer'}`);
       }
-    } catch (error) {
+    } catch {
       setGenerating(false);
       messageApi.error("Erreur réseau lors de la communication avec l'API.");
     }
